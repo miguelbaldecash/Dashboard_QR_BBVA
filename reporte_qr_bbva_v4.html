@@ -1,0 +1,1943 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporte QR BBVA - Corte 11 Junio 2026</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #f0f2f5;
+            color: #1a1a2e;
+            padding: 40px 20px;
+        }
+        .container { max-width: 1100px; margin: 0 auto; }
+        .header {
+            background: linear-gradient(135deg, #004481, #0066b3);
+            color: white;
+            padding: 40px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 20px rgba(0,68,129,0.3);
+        }
+        .header h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+        .header p { font-size: 15px; opacity: 0.85; }
+        .header .meta {
+            margin-top: 16px;
+            display: flex;
+            gap: 24px;
+            font-size: 13px;
+            opacity: 0.75;
+            flex-wrap: wrap;
+        }
+
+        .phase-banner {
+            background: linear-gradient(135deg, #1b5e20, #2e7d32);
+            color: white;
+            padding: 20px 32px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            box-shadow: 0 2px 12px rgba(27,94,32,0.2);
+        }
+        .phase-banner .phase-icon {
+            width: 56px; height: 56px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px; font-weight: 700;
+            flex-shrink: 0;
+        }
+        .phase-banner .phase-text h3 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+        .phase-banner .phase-text p { font-size: 13px; opacity: 0.85; }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .kpi-card {
+            background: white;
+            border-radius: 12px;
+            padding: 28px 24px;
+            text-align: center;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            position: relative;
+            overflow: hidden;
+        }
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 4px;
+        }
+        .kpi-card:nth-child(1)::before { background: #004481; }
+        .kpi-card:nth-child(2)::before { background: #0066b3; }
+        .kpi-card:nth-child(3)::before { background: #28a745; }
+        .kpi-card:nth-child(4)::before { background: #e8590c; }
+        .kpi-label { font-size: 13px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+        .kpi-value { font-size: 36px; font-weight: 700; }
+        .kpi-card:nth-child(1) .kpi-value { color: #004481; }
+        .kpi-card:nth-child(2) .kpi-value { color: #0066b3; }
+        .kpi-card:nth-child(3) .kpi-value { color: #28a745; }
+        .kpi-card:nth-child(4) .kpi-value { color: #e8590c; }
+        .kpi-sub { font-size: 13px; color: #888; margin-top: 6px; }
+
+        .section {
+            background: white;
+            border-radius: 12px;
+            padding: 32px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        }
+        .section h2 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #004481;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .section h2 .num {
+            background: #004481;
+            color: white;
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        .section h2 .new-badge {
+            background: #e8590c;
+            color: white;
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        th {
+            text-align: left;
+            padding: 12px 16px;
+            background: #f8f9fa;
+            color: #555;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #e9ecef;
+        }
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: #f8f9fb; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .bold { font-weight: 600; }
+
+        .bar-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .bar-bg {
+            flex: 1;
+            height: 28px;
+            background: #f0f2f5;
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .detail-table { margin-top: 16px; }
+        .detail-table th { font-size: 11px; }
+        .detail-table td { font-size: 13px; padding: 10px 16px; }
+        .status-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .status-paid { background: #d4edda; color: #155724; }
+        .status-expired { background: #fde2e2; color: #9b1c1c; }
+        .status-pending { background: #fff3cd; color: #856404; }
+        .status-cancelled { background: #f8d7da; color: #721c24; }
+        .status-active { background: #cce5ff; color: #004085; }
+
+        .note {
+            background: #fff8e1;
+            border-left: 4px solid #ffc107;
+            padding: 16px 20px;
+            border-radius: 0 8px 8px 0;
+            font-size: 13px;
+            color: #665200;
+            margin-top: 20px;
+            line-height: 1.6;
+        }
+
+        .group-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .group-card {
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+        }
+        .group-card.control { background: #f8f9fa; border: 2px solid #dee2e6; }
+        .group-card.group-a { background: #e3f2fd; border: 2px solid #90caf9; }
+        .group-card.group-b { background: #fce4ec; border: 2px solid #f48fb1; }
+        .group-card.group-c { background: #f3e5f5; border: 2px solid #ce93d8; }
+        .group-card .group-name { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+        .group-card .group-n { font-size: 32px; font-weight: 700; margin-bottom: 4px; }
+        .group-card .group-detail { font-size: 12px; color: #666; }
+        .group-card.control .group-name { color: #495057; }
+        .group-card.control .group-n { color: #495057; }
+        .group-card.group-a .group-name { color: #1565c0; }
+        .group-card.group-a .group-n { color: #1565c0; }
+        .group-card.group-b .group-name { color: #c62828; }
+        .group-card.group-b .group-n { color: #c62828; }
+        .group-card.group-c .group-name { color: #7b1fa2; }
+        .group-card.group-c .group-n { color: #7b1fa2; }
+
+        .timeline-bar {
+            display: flex;
+            height: 40px;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+        .timeline-segment {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 11px;
+            font-weight: 600;
+            position: relative;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 24px;
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        .divider {
+            border: none;
+            border-top: 3px solid #004481;
+            margin: 40px 0 30px 0;
+            opacity: 0.15;
+        }
+        .section-title {
+            text-align: center;
+            font-size: 22px;
+            font-weight: 700;
+            color: #004481;
+            margin-bottom: 8px;
+        }
+        .section-subtitle {
+            text-align: center;
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 768px) {
+            .kpi-grid, .group-grid { grid-template-columns: repeat(2, 1fr); }
+            .header .meta { flex-direction: column; gap: 4px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Reporte QR BBVA</h1>
+            <p>Piloto de pagos con QR BBVA: resultados acumulados + nuevo experimento A/B/C</p>
+            <div class="meta">
+                <span>Piloto mayo: 232 clientes | Cohorte junio: 2,550 clientes</span>
+                <span>Corte: 11/06/2026</span>
+            </div>
+        </div>
+
+        <!-- ===== FASE 2: NUEVO EXPERIMENTO ===== -->
+        <div class="phase-banner">
+            <div class="phase-icon">2</div>
+            <div class="phase-text">
+                <h3>Fase 2: Experimento A/B/C en curso</h3>
+                <p>Lanzado el 10/06/2026 &mdash; 2,550 clientes con cuotas venciendo entre el 10 y 18 de junio, distribuidos en 4 grupos balanceados</p>
+            </div>
+        </div>
+
+        <!-- KPI Experimento -->
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-label">Clientes en experimento</div>
+                <div class="kpi-value">2,550</div>
+                <div class="kpi-sub">4 grupos balanceados</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Ventana de vencimiento</div>
+                <div class="kpi-value">9 dias</div>
+                <div class="kpi-sub">10 jun &ndash; 18 jun 2026</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Monto total en juego</div>
+                <div class="kpi-value">S/ 424K</div>
+                <div class="kpi-sub">S/ 424,164.59 en cuotas</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Cuota promedio</div>
+                <div class="kpi-value">S/ 166</div>
+                <div class="kpi-sub">Prom. global validado vs BD</div>
+            </div>
+        </div>
+
+        <!-- Section 1: Diseno del experimento -->
+        <div class="section">
+            <h2><span class="num">1</span> Diseno del experimento <span class="new-badge">Nuevo</span></h2>
+            <p style="color:#666; font-size:14px; margin-bottom:24px;">2,550 clientes con cuotas venciendo entre el 10 y 18 de junio, asignados aleatoriamente a 4 grupos balanceados por fecha de vencimiento y monto.</p>
+
+            <div class="group-grid">
+                <div class="group-card control">
+                    <div class="group-name">Control</div>
+                    <div class="group-n">638</div>
+                    <div class="group-detail">S/ 106,885 total</div>
+                    <div class="group-detail">Prom. S/ 167.53</div>
+                </div>
+                <div class="group-card group-a">
+                    <div class="group-name">Grupo A</div>
+                    <div class="group-n">638</div>
+                    <div class="group-detail">S/ 100,698 total</div>
+                    <div class="group-detail">Prom. S/ 157.83</div>
+                </div>
+                <div class="group-card group-b">
+                    <div class="group-name">Grupo B</div>
+                    <div class="group-n">637</div>
+                    <div class="group-detail">S/ 111,383 total</div>
+                    <div class="group-detail">Prom. S/ 174.86</div>
+                </div>
+                <div class="group-card group-c">
+                    <div class="group-name">Grupo C</div>
+                    <div class="group-n">637</div>
+                    <div class="group-detail">S/ 105,198 total</div>
+                    <div class="group-detail">Prom. S/ 165.15</div>
+                </div>
+            </div>
+
+            <div class="note">
+                <strong>Balance de grupos:</strong> Los 4 grupos tienen tamano practicamente identico (637-638 clientes) y promedios de cuota similares (S/ 158 - S/ 175). La distribucion por fecha de vencimiento esta balanceada proporcionalmente en cada grupo. Diferencia maxima entre promedios: S/ 17.03 (10.8%).
+            </div>
+        </div>
+
+        <!-- Section 2: Distribucion por fecha de vencimiento -->
+        <div class="section">
+            <h2><span class="num">2</span> Distribucion por fecha de vencimiento <span class="new-badge">Nuevo</span></h2>
+            <p style="color:#666; font-size:14px; margin-bottom:20px;">Cada grupo tiene la misma proporcion de clientes por fecha de vencimiento, asegurando comparabilidad.</p>
+
+            <table style="margin-bottom:20px;">
+                <thead>
+                    <tr>
+                        <th>Fecha venc.</th>
+                        <th class="text-center">Control</th>
+                        <th class="text-center">A</th>
+                        <th class="text-center">B</th>
+                        <th class="text-center">C</th>
+                        <th class="text-center">Total</th>
+                        <th class="text-center">% del total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="bold">10/06 (ayer)</td>
+                        <td class="text-center">185</td>
+                        <td class="text-center">185</td>
+                        <td class="text-center">184</td>
+                        <td class="text-center">184</td>
+                        <td class="text-center bold">738</td>
+                        <td class="text-center">28.9%</td>
+                    </tr>
+                    <tr style="background:#f0f7ff;">
+                        <td class="bold">11/06 (hoy)</td>
+                        <td class="text-center">10</td>
+                        <td class="text-center">10</td>
+                        <td class="text-center">11</td>
+                        <td class="text-center">11</td>
+                        <td class="text-center bold">42</td>
+                        <td class="text-center">1.6%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">12/06</td>
+                        <td class="text-center">12</td>
+                        <td class="text-center">12</td>
+                        <td class="text-center">11</td>
+                        <td class="text-center">11</td>
+                        <td class="text-center bold">46</td>
+                        <td class="text-center">1.8%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">13/06</td>
+                        <td class="text-center">1</td>
+                        <td class="text-center">1</td>
+                        <td class="text-center">2</td>
+                        <td class="text-center">2</td>
+                        <td class="text-center bold">6</td>
+                        <td class="text-center">0.2%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">14/06</td>
+                        <td class="text-center">2</td>
+                        <td class="text-center">2</td>
+                        <td class="text-center">2</td>
+                        <td class="text-center">1</td>
+                        <td class="text-center bold">7</td>
+                        <td class="text-center">0.3%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">15/06</td>
+                        <td class="text-center">39</td>
+                        <td class="text-center">38</td>
+                        <td class="text-center">38</td>
+                        <td class="text-center">39</td>
+                        <td class="text-center bold">154</td>
+                        <td class="text-center">6.0%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">16/06</td>
+                        <td class="text-center">9</td>
+                        <td class="text-center">10</td>
+                        <td class="text-center">10</td>
+                        <td class="text-center">9</td>
+                        <td class="text-center bold">38</td>
+                        <td class="text-center">1.5%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">17/06</td>
+                        <td class="text-center">9</td>
+                        <td class="text-center">9</td>
+                        <td class="text-center">9</td>
+                        <td class="text-center">9</td>
+                        <td class="text-center bold">36</td>
+                        <td class="text-center">1.4%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">18/06</td>
+                        <td class="text-center">371</td>
+                        <td class="text-center">371</td>
+                        <td class="text-center">370</td>
+                        <td class="text-center">371</td>
+                        <td class="text-center bold">1,483</td>
+                        <td class="text-center">58.2%</td>
+                    </tr>
+                    <tr style="background:#f8f9fa;">
+                        <td class="bold">Total</td>
+                        <td class="text-center bold">638</td>
+                        <td class="text-center bold">638</td>
+                        <td class="text-center bold">637</td>
+                        <td class="text-center bold">637</td>
+                        <td class="text-center bold">2,550</td>
+                        <td class="text-center bold">100%</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Timeline visual -->
+            <p style="font-size:13px; color:#666; margin-bottom:8px;"><strong>Concentracion de vencimientos</strong></p>
+            <div class="timeline-bar">
+                <div class="timeline-segment" style="width:28.9%; background:#004481;">10 jun: 738</div>
+                <div class="timeline-segment" style="width:5.3%; background:#0066b3; font-size:9px;">11-14</div>
+                <div class="timeline-segment" style="width:6.0%; background:#28a745;">15: 154</div>
+                <div class="timeline-segment" style="width:2.9%; background:#6f42c1; font-size:9px;">16-17</div>
+                <div class="timeline-segment" style="width:58.2%; background:#e8590c;">18 jun: 1,483</div>
+            </div>
+            <p style="font-size:12px; color:#888; margin-bottom:16px;">El 87.1% de los vencimientos se concentra en dos fechas: 10/06 (29%) y 18/06 (58%).</p>
+
+            <div class="note">
+                <strong>Estado actual:</strong> Las 738 cuotas con vencimiento 10/06 ya vencieron ayer. Las 42 cuotas del 11/06 vencen hoy. El grueso del experimento (1,483 cuotas, 58%) vence el 18/06. Los resultados iniciales de los primeros dias permitiran hacer un analisis temprano antes de que venza el grupo mas grande.
+            </div>
+        </div>
+
+        <!-- Section 3: Balance de montos -->
+        <div class="section">
+            <h2><span class="num">3</span> Balance de montos entre grupos <span class="new-badge">Nuevo</span></h2>
+            <p style="color:#666; font-size:14px; margin-bottom:20px;">Verificacion de que los grupos son comparables en terminos de monto de cuota.</p>
+
+            <table style="margin-bottom:20px;">
+                <thead>
+                    <tr>
+                        <th>Grupo</th>
+                        <th class="text-center">N</th>
+                        <th class="text-right">Monto total (S/)</th>
+                        <th class="text-right">Promedio (S/)</th>
+                        <th class="text-center">Desviacion vs media</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="bold" style="color:#495057;">Control</td>
+                        <td class="text-center">638</td>
+                        <td class="text-right">106,885.40</td>
+                        <td class="text-right bold">167.53</td>
+                        <td class="text-center" style="color:#28a745;">+0.7%</td>
+                        <td>
+                            <div style="width:100%; height:18px; background:#dee2e6; border-radius:4px;"></div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="bold" style="color:#1565c0;">Grupo A</td>
+                        <td class="text-center">638</td>
+                        <td class="text-right">100,697.69</td>
+                        <td class="text-right bold">157.83</td>
+                        <td class="text-center" style="color:#e8590c;">-5.1%</td>
+                        <td>
+                            <div style="width:94%; height:18px; background:#90caf9; border-radius:4px;"></div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="bold" style="color:#c62828;">Grupo B</td>
+                        <td class="text-center">637</td>
+                        <td class="text-right">111,383.20</td>
+                        <td class="text-right bold">174.86</td>
+                        <td class="text-center" style="color:#28a745;">+5.1%</td>
+                        <td>
+                            <div style="width:100%; height:18px; background:#f48fb1; border-radius:4px;"></div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="bold" style="color:#7b1fa2;">Grupo C</td>
+                        <td class="text-center">637</td>
+                        <td class="text-right">105,198.30</td>
+                        <td class="text-right bold">165.15</td>
+                        <td class="text-center" style="color:#888;">-0.7%</td>
+                        <td>
+                            <div style="width:98%; height:18px; background:#ce93d8; border-radius:4px;"></div>
+                        </td>
+                    </tr>
+                    <tr style="background:#f8f9fa;">
+                        <td class="bold">Promedio global</td>
+                        <td class="text-center bold">2,550</td>
+                        <td class="text-right bold">424,164.59</td>
+                        <td class="text-right bold">166.34</td>
+                        <td class="text-center">-</td>
+                        <td></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="note" style="background:#e8f5e9; border-left-color:#28a745; color:#1b5e20;">
+                <strong>Validacion:</strong> La diferencia maxima entre promedios de grupo es S/ 17.03 (Grupo A: S/ 157.83 vs Grupo B: S/ 174.86), equivalente a ~10.8%. Todos los grupos estan dentro de +/- 5.1% de la media global (S/ 166.34). El balance es aceptable para un test A/B/C.
+            </div>
+
+            <div class="note" style="background:#fff0f0; border-left-color:#e8590c; color:#7a1c1c;">
+                <strong>Nota de validacion (BD vs Excel):</strong> Los montos de esta seccion fueron validados contra la base de datos (tabla <code>cronograma</code>, cuotas activas en ventana 10-18 jun). Se encontraron <strong>3 discrepancias menores</strong> donde el Excel subestimaba el monto porque contaba 1 cuota cuando la BD tiene 2 en la ventana:
+                <ul style="margin-top:8px; padding-left:20px;">
+                    <li><strong>Control</strong> &mdash; DNI 70918909 (sol. 108771): Excel S/ 49 vs BD S/ 98 (2 cuotas: 10/06 + 17/06)</li>
+                    <li><strong>Grupo B</strong> &mdash; DNI 73531395 (sol. 98802): Excel S/ 49 vs BD S/ 98 (2 cuotas: 11/06 + 18/06)</li>
+                    <li><strong>Grupo C</strong> &mdash; DNI 75321780 (sol. 92752): Excel S/ 25 vs BD S/ 50 (2 cuotas: 11/06 + 18/06)</li>
+                </ul>
+                <strong>Impacto total: S/ 123 de S/ 424,165 (0.03%).</strong> Los montos mostrados en este dashboard usan los valores de la BD. El Grupo A coincide exactamente.
+            </div>
+        </div>
+
+        <!-- Section 4: Proximos pasos del experimento -->
+        <div class="section">
+            <h2><span class="num">4</span> Timeline y proximos hitos</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Evento</th>
+                        <th class="text-center">Clientes afectados</th>
+                        <th class="text-center">% acumulado</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="background:#f0f7ff;">
+                        <td class="bold">10/06</td>
+                        <td>Lanzamiento + primer vencimiento</td>
+                        <td class="text-center bold">738</td>
+                        <td class="text-center">28.9%</td>
+                        <td><span class="status-badge status-expired">Vencido</span></td>
+                    </tr>
+                    <tr style="background:#fff8e1;">
+                        <td class="bold">11/06</td>
+                        <td>Segundo vencimiento (hoy)</td>
+                        <td class="text-center bold">42</td>
+                        <td class="text-center">30.6%</td>
+                        <td><span class="status-badge status-pending">Hoy</span></td>
+                    </tr>
+                    <tr>
+                        <td class="bold">12-14/06</td>
+                        <td>Vencimientos intermedios</td>
+                        <td class="text-center">59</td>
+                        <td class="text-center">32.9%</td>
+                        <td><span class="status-badge status-active">Pendiente</span></td>
+                    </tr>
+                    <tr>
+                        <td class="bold">15/06</td>
+                        <td>Vencimiento medio (domingo)</td>
+                        <td class="text-center bold">154</td>
+                        <td class="text-center">38.9%</td>
+                        <td><span class="status-badge status-active">Pendiente</span></td>
+                    </tr>
+                    <tr>
+                        <td class="bold">16-17/06</td>
+                        <td>Vencimientos previos al cierre</td>
+                        <td class="text-center">74</td>
+                        <td class="text-center">41.8%</td>
+                        <td><span class="status-badge status-active">Pendiente</span></td>
+                    </tr>
+                    <tr style="background:#fde2e2;">
+                        <td class="bold">18/06</td>
+                        <td>Vencimiento principal (58% de la cohorte)</td>
+                        <td class="text-center bold">1,483</td>
+                        <td class="text-center bold">100%</td>
+                        <td><span class="status-badge status-active">Pendiente</span></td>
+                    </tr>
+                    <tr style="background:#e8f5e9;">
+                        <td class="bold">25/06</td>
+                        <td>Corte a 7 dias post-ultimo vencimiento</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td><span class="status-badge" style="background:#e8f5e9; color:#1b5e20;">Reporte</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- ===== RESULTADOS FASE 2: PRIMERAS 48h ===== -->
+        <hr class="divider">
+        <p class="section-title">Resultados Fase 2 &mdash; Primeras 48 horas</p>
+        <p class="section-subtitle">Corte: 11/06/2026 &mdash; 212 pagos de 2,620 cuotas en ventana &mdash; Solo 780 cuotas vencidas hasta hoy (10-11 jun)</p>
+
+        <!-- Section 5: Distribucion de pagos Fase 2 -->
+        <div class="section">
+            <h2><span class="num">5</span> Distribucion de pagos (Fase 2 - 48h) <span class="new-badge">Nuevo</span></h2>
+            <p style="color:#666; font-size:14px; margin-bottom:8px;">De las 2,620 cuotas en ventana (2,550 clientes), 780 ya vencieron (10-11 jun). <strong>212 solicitudes han pagado</strong>.</p>
+            <p style="color:#666; font-size:14px; margin-bottom:24px;">El grueso de la cohorte (1,483 cuotas, 58%) vence el 18/06, por lo que estas cifras son muy preliminares.</p>
+
+            <table style="margin-bottom:20px;">
+                <thead>
+                    <tr>
+                        <th>Categoria</th>
+                        <th class="text-center">Solicitudes</th>
+                        <th class="text-center">% de 212 pagos</th>
+                        <th>Detalle</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="bold" style="color:#28a745;">Pagaron con QR</td>
+                        <td class="text-center bold" style="color:#28a745;">92</td>
+                        <td class="text-center bold" style="color:#28a745;">43.4%</td>
+                        <td style="color:#666;">Generaron QR y completaron pago</td>
+                    </tr>
+                    <tr>
+                        <td class="bold" style="color:#e8590c;">QR &rarr; migraron a otro</td>
+                        <td class="text-center bold" style="color:#e8590c;">33</td>
+                        <td class="text-center bold" style="color:#e8590c;">15.6%</td>
+                        <td style="color:#666;">Generaron QR, pagaron via Monnet u otro medio</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">Monnet directo</td>
+                        <td class="text-center bold">68</td>
+                        <td class="text-center">32.1%</td>
+                        <td style="color:#666;">Sin interaccion con QR</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">Mercado Pago directo</td>
+                        <td class="text-center bold">13</td>
+                        <td class="text-center">6.1%</td>
+                        <td style="color:#666;">Sin interaccion con QR</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">BBVA Recaudo directo</td>
+                        <td class="text-center bold">6</td>
+                        <td class="text-center">2.8%</td>
+                        <td style="color:#666;">Pago via recaudo bancario</td>
+                    </tr>
+                    <tr style="background:#f8f9fa;">
+                        <td class="bold">Total pagos</td>
+                        <td class="text-center bold">212</td>
+                        <td class="text-center bold">100%</td>
+                        <td></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div style="margin-bottom: 12px;">
+                <div class="bar-container">
+                    <div class="bar-bg" style="height:36px;">
+                        <div style="display:flex; height:100%;">
+                            <div style="width:43.4%; background:#28a745; display:flex; align-items:center; justify-content:center; color:white; font-size:11px; font-weight:600; border-radius:6px 0 0 6px;">QR 43.4%</div>
+                            <div style="width:15.6%; background:#ffc107; display:flex; align-items:center; justify-content:center; color:#665200; font-size:11px; font-weight:600;">QR&rarr;otro 15.6%</div>
+                            <div style="width:32.1%; background:#004481; display:flex; align-items:center; justify-content:center; color:white; font-size:11px; font-weight:600;">Monnet 32.1%</div>
+                            <div style="width:8.9%; background:#6f42c1; display:flex; align-items:center; justify-content:center; color:white; font-size:10px; font-weight:600; border-radius:0 6px 6px 0;">MP+Rec 8.9%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="note" style="background:#e8f5e9; border-left-color:#28a745; color:#1b5e20;">
+                <strong>Lectura clave:</strong> El QR capturo el <strong>43.4%</strong> de los pagos en 48h (vs 30.8% acumulado en piloto). Sumando migraciones, el <strong>59.0% de los pagos (125 de 212)</strong> provinieron de clientes que interactuaron con el QR. La adopcion de QR es significativamente mayor que en el piloto.
+            </div>
+        </div>
+
+        <!-- Section 6: Resultados por grupo -->
+        <div class="section">
+            <h2><span class="num">6</span> Resultados por grupo (48h) <span class="new-badge">Nuevo</span></h2>
+            <p style="color:#666; font-size:14px; margin-bottom:20px;">Comparacion temprana entre los 4 grupos. Datos muy preliminares &mdash; la mayoria de cuotas aun no vence.</p>
+
+            <table style="margin-bottom:20px;">
+                <thead>
+                    <tr>
+                        <th>Grupo</th>
+                        <th class="text-center">Base</th>
+                        <th class="text-center">Pagaron</th>
+                        <th class="text-center">% Cobranza</th>
+                        <th class="text-center">Via QR</th>
+                        <th class="text-center">% QR</th>
+                        <th class="text-center">Generaron QR</th>
+                        <th class="text-center">Conv. QR</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="bold" style="color:#495057;">Control</td>
+                        <td class="text-center">638</td>
+                        <td class="text-center bold">65</td>
+                        <td class="text-center">10.2%</td>
+                        <td class="text-center bold" style="color:#28a745;">29</td>
+                        <td class="text-center bold" style="color:#28a745;">44.6%</td>
+                        <td class="text-center">47</td>
+                        <td class="text-center bold">61.7%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold" style="color:#1565c0;">Grupo A</td>
+                        <td class="text-center">638</td>
+                        <td class="text-center bold">47</td>
+                        <td class="text-center">7.4%</td>
+                        <td class="text-center bold" style="color:#28a745;">20</td>
+                        <td class="text-center bold" style="color:#28a745;">42.6%</td>
+                        <td class="text-center">31</td>
+                        <td class="text-center bold">64.5%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold" style="color:#c62828;">Grupo B</td>
+                        <td class="text-center">637</td>
+                        <td class="text-center bold">56</td>
+                        <td class="text-center">8.8%</td>
+                        <td class="text-center bold" style="color:#28a745;">27</td>
+                        <td class="text-center bold" style="color:#28a745;">48.2%</td>
+                        <td class="text-center">39</td>
+                        <td class="text-center bold">69.2%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold" style="color:#7b1fa2;">Grupo C</td>
+                        <td class="text-center">637</td>
+                        <td class="text-center bold">44</td>
+                        <td class="text-center">6.9%</td>
+                        <td class="text-center bold" style="color:#28a745;">16</td>
+                        <td class="text-center bold" style="color:#28a745;">36.4%</td>
+                        <td class="text-center">26</td>
+                        <td class="text-center bold">61.5%</td>
+                    </tr>
+                    <tr style="background:#f8f9fa;">
+                        <td class="bold">Total</td>
+                        <td class="text-center bold">2,550</td>
+                        <td class="text-center bold">212</td>
+                        <td class="text-center bold">8.3%</td>
+                        <td class="text-center bold" style="color:#28a745;">92</td>
+                        <td class="text-center bold" style="color:#28a745;">43.4%</td>
+                        <td class="text-center bold">143</td>
+                        <td class="text-center bold">64.3%</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 style="font-size:14px; color:#004481; margin-bottom:12px;">Desglose por pasarela y grupo</h3>
+            <table class="detail-table" style="margin-bottom:20px;">
+                <thead>
+                    <tr>
+                        <th>Grupo</th>
+                        <th class="text-center">Monnet</th>
+                        <th class="text-center">BBVA QR</th>
+                        <th class="text-center">Mercado Pago</th>
+                        <th class="text-center">BBVA Recaudo</th>
+                        <th class="text-center">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="bold" style="color:#495057;">Control</td>
+                        <td class="text-center">29 (44.6%)</td>
+                        <td class="text-center bold" style="color:#28a745;">29 (44.6%)</td>
+                        <td class="text-center">6 (9.2%)</td>
+                        <td class="text-center">1 (1.5%)</td>
+                        <td class="text-center bold">65</td>
+                    </tr>
+                    <tr>
+                        <td class="bold" style="color:#1565c0;">Grupo A</td>
+                        <td class="text-center">22 (46.8%)</td>
+                        <td class="text-center bold" style="color:#28a745;">20 (42.6%)</td>
+                        <td class="text-center">4 (8.5%)</td>
+                        <td class="text-center">1 (2.1%)</td>
+                        <td class="text-center bold">47</td>
+                    </tr>
+                    <tr>
+                        <td class="bold" style="color:#c62828;">Grupo B</td>
+                        <td class="text-center">25 (44.6%)</td>
+                        <td class="text-center bold" style="color:#28a745;">27 (48.2%)</td>
+                        <td class="text-center">3 (5.4%)</td>
+                        <td class="text-center">1 (1.8%)</td>
+                        <td class="text-center bold">56</td>
+                    </tr>
+                    <tr>
+                        <td class="bold" style="color:#7b1fa2;">Grupo C</td>
+                        <td class="text-center">21 (47.7%)</td>
+                        <td class="text-center bold" style="color:#28a745;">16 (36.4%)</td>
+                        <td class="text-center">4 (9.1%)</td>
+                        <td class="text-center">3 (6.8%)</td>
+                        <td class="text-center bold">44</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="note">
+                <strong>Lectura temprana:</strong> Con solo 48h de datos, el Control lidera en cobranza (10.2%) y el Grupo B tiene el mayor % QR (48.2%). El Grupo C muestra menor adopcion QR (36.4%). Estos numeros cambiaran sustancialmente cuando venzan las cuotas del 18/06 (58% de la cohorte). <strong>No sacar conclusiones definitivas aun.</strong>
+            </div>
+        </div>
+
+        <!-- Section 7: Banco seleccionado Fase 2 -->
+        <div class="section">
+            <h2><span class="num">7</span> Banco seleccionado por pasarela (Fase 2 - 48h) <span class="new-badge">Nuevo</span></h2>
+            <p style="color:#666; font-size:14px; margin-bottom:20px;">Desglose del banco/metodo dentro de cada pasarela. Cobertura: 81 de 97 pagos Monnet (via evento_zonaclientes), 15 de 17 pagos MP (via mercado_pago_payment_json).</p>
+
+            <h3 style="font-size:14px; color:#004481; margin-bottom:12px;">Monnet: banco seleccionado (81 registros)</h3>
+            <table style="margin-bottom:8px;">
+                <thead>
+                    <tr>
+                        <th>Banco/Metodo</th>
+                        <th class="text-center">Clientes</th>
+                        <th class="text-center">%</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="bold" style="color:#6f21a8;">Yape</td>
+                        <td class="text-center bold">53</td>
+                        <td class="text-center bold">65.4%</td>
+                        <td><div style="width:65.4%; height:18px; background:#6f21a8; border-radius:4px;"></div></td>
+                    </tr>
+                    <tr>
+                        <td class="bold" style="color:#004481;">BCP</td>
+                        <td class="text-center bold">18</td>
+                        <td class="text-center">22.2%</td>
+                        <td><div style="width:22.2%; height:18px; background:#004481; border-radius:4px;"></div></td>
+                    </tr>
+                    <tr>
+                        <td class="bold" style="color:#0066b3;">BBVA</td>
+                        <td class="text-center bold">7</td>
+                        <td class="text-center">8.6%</td>
+                        <td><div style="width:8.6%; height:18px; background:#0066b3; border-radius:4px; min-width:8px;"></div></td>
+                    </tr>
+                    <tr>
+                        <td class="bold" style="color:#28a745;">Interbank</td>
+                        <td class="text-center bold">3</td>
+                        <td class="text-center">3.7%</td>
+                        <td><div style="width:3.7%; height:18px; background:#28a745; border-radius:4px; min-width:8px;"></div></td>
+                    </tr>
+                    <tr style="background:#f8f9fa;">
+                        <td class="bold">Total con banco</td>
+                        <td class="text-center bold">81</td>
+                        <td class="text-center bold">100%</td>
+                        <td></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 style="font-size:14px; color:#004481; margin-bottom:12px; margin-top:24px;">Monnet: banco por rango de cuota</h3>
+            <table class="detail-table" style="margin-bottom:24px;">
+                <thead>
+                    <tr>
+                        <th>Rango</th>
+                        <th class="text-center">Yape</th>
+                        <th class="text-center">BCP</th>
+                        <th class="text-center">BBVA</th>
+                        <th class="text-center">Interbank</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="bold">S/ 0 - 50</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">S/ 51 - 150</td>
+                        <td class="text-center bold">25</td>
+                        <td class="text-center">8</td>
+                        <td class="text-center">5</td>
+                        <td class="text-center">1</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">S/ 151 - 250</td>
+                        <td class="text-center bold">22</td>
+                        <td class="text-center">5</td>
+                        <td class="text-center">2</td>
+                        <td class="text-center">-</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">S/ 251+</td>
+                        <td class="text-center bold">7</td>
+                        <td class="text-center">5</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">2</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 style="font-size:14px; color:#004481; margin-bottom:12px;">Mercado Pago: metodo de pago (15 registros)</h3>
+            <table style="margin-bottom:8px;">
+                <thead>
+                    <tr>
+                        <th>Metodo</th>
+                        <th class="text-center">Clientes</th>
+                        <th class="text-center">%</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="bold">PagoEfectivo (ATM/agente)</td>
+                        <td class="text-center bold">5</td>
+                        <td class="text-center">33.3%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold" style="color:#6f21a8;">Yape</td>
+                        <td class="text-center bold">4</td>
+                        <td class="text-center">26.7%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">Debito Visa</td>
+                        <td class="text-center bold">2</td>
+                        <td class="text-center">13.3%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold" style="color:#004481;">BCP</td>
+                        <td class="text-center bold">2</td>
+                        <td class="text-center">13.3%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold" style="color:#28a745;">Interbank</td>
+                        <td class="text-center bold">1</td>
+                        <td class="text-center">6.7%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold" style="color:#0066b3;">BBVA</td>
+                        <td class="text-center bold">1</td>
+                        <td class="text-center">6.7%</td>
+                    </tr>
+                    <tr style="background:#f8f9fa;">
+                        <td class="bold">Total</td>
+                        <td class="text-center bold">15</td>
+                        <td class="text-center bold">100%</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="note" style="background:#e8f5e9; border-left-color:#28a745; color:#1b5e20;">
+                <strong>Comparacion con piloto:</strong> Yape sigue dominando Monnet pero bajo de 81% a <strong>65.4%</strong>. BCP subio de 12.7% a <strong>22.2%</strong> y BBVA de 3.2% a <strong>8.6%</strong>. Mayor diversificacion de bancos en Fase 2. En MP, PagoEfectivo sigue primero (33%) pero Yape gano terreno (27% vs 25% en piloto). Novedad: 2 pagos con debito Visa.
+            </div>
+        </div>
+
+        <!-- Section 8: Evolucion diaria Fase 2 -->
+        <div class="section">
+            <h2><span class="num">8</span> Evolucion diaria de pagos (Fase 2) <span class="new-badge">Nuevo</span></h2>
+            <p style="color:#666; font-size:13px; margin-bottom:16px;">Pagos por dia desde el lanzamiento del experimento (10/06).</p>
+            <table class="detail-table">
+                <thead>
+                    <tr>
+                        <th>Dia</th>
+                        <th class="text-center">Monnet</th>
+                        <th class="text-center">BBVA QR</th>
+                        <th class="text-center">MP</th>
+                        <th class="text-center">Recaudo</th>
+                        <th class="text-center">Total</th>
+                        <th class="text-center">% QR</th>
+                        <th class="text-center">Acum.</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="opacity:0.6;">
+                        <td class="bold">07/06*</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">1</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">1</td>
+                        <td class="text-center" style="color:#ccc;">-</td>
+                        <td class="text-center">1</td>
+                    </tr>
+                    <tr style="background:#f0f7ff;">
+                        <td class="bold">10/06</td>
+                        <td class="text-center">79</td>
+                        <td class="text-center bold" style="color:#28a745;">63</td>
+                        <td class="text-center">12</td>
+                        <td class="text-center">3</td>
+                        <td class="text-center bold">157</td>
+                        <td class="text-center bold" style="color:#28a745;">40.1%</td>
+                        <td class="text-center">158</td>
+                    </tr>
+                    <tr style="background:#f0f7ff;">
+                        <td class="bold">11/06</td>
+                        <td class="text-center">18</td>
+                        <td class="text-center bold" style="color:#28a745;">29</td>
+                        <td class="text-center">3</td>
+                        <td class="text-center">3</td>
+                        <td class="text-center bold">53</td>
+                        <td class="text-center bold" style="color:#28a745;">54.7%</td>
+                        <td class="text-center">211</td>
+                    </tr>
+                    <tr style="background:#f8f9fa;">
+                        <td class="bold">Total</td>
+                        <td class="text-center bold">97</td>
+                        <td class="text-center bold" style="color:#28a745;">92</td>
+                        <td class="text-center bold">16</td>
+                        <td class="text-center bold">6</td>
+                        <td class="text-center bold">211</td>
+                        <td class="text-center bold" style="color:#28a745;">43.6%</td>
+                        <td class="text-center bold">211</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p style="color:#666; font-size:12px; margin-top:4px;">* 07/06: 1 pago de MP previo al lanzamiento del experimento.</p>
+
+            <div class="note">
+                <strong>Patron:</strong> El dia del lanzamiento (10/06) concentro el 74% de los pagos. El % QR salto de 40.1% el dia 1 a <strong>54.7% el dia 2</strong>, donde QR supero a Monnet (29 vs 18). Comparado con el piloto (26% QR dia 1, 27% dia 2), la adopcion de QR es notablemente mayor en Fase 2.
+            </div>
+        </div>
+
+        <!-- Section 8: Segmentacion por monto Fase 2 -->
+        <div class="section">
+            <h2><span class="num">9</span> Segmentacion por monto de cuota (Fase 2 - 48h) <span class="new-badge">Nuevo</span></h2>
+            <p style="color:#666; font-size:14px; margin-bottom:20px;">Comportamiento de pago y adopcion de QR por rango de cuota. Base: 2,620 solicitudes.</p>
+
+            <table style="margin-bottom:24px;">
+                <thead>
+                    <tr>
+                        <th>Rango</th>
+                        <th class="text-center">Base</th>
+                        <th class="text-center">Pagaron</th>
+                        <th class="text-center">% Cobranza</th>
+                        <th class="text-center">Via QR</th>
+                        <th class="text-center">% QR</th>
+                        <th class="text-center">Generaron QR</th>
+                        <th class="text-center">Conv. QR</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="bold">S/ 0 - 50</td>
+                        <td class="text-center">182</td>
+                        <td class="text-center">13</td>
+                        <td class="text-center">7.1%</td>
+                        <td class="text-center bold" style="color:#28a745;">5</td>
+                        <td class="text-center" style="color:#28a745;">38.5%</td>
+                        <td class="text-center">8</td>
+                        <td class="text-center">62.5%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">S/ 51 - 150</td>
+                        <td class="text-center">1,105</td>
+                        <td class="text-center">95</td>
+                        <td class="text-center">8.6%</td>
+                        <td class="text-center bold" style="color:#28a745;">44</td>
+                        <td class="text-center bold" style="color:#28a745;">46.3%</td>
+                        <td class="text-center">64</td>
+                        <td class="text-center bold" style="color:#28a745;">68.8%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">S/ 151 - 250</td>
+                        <td class="text-center">987</td>
+                        <td class="text-center">72</td>
+                        <td class="text-center">7.3%</td>
+                        <td class="text-center bold" style="color:#28a745;">32</td>
+                        <td class="text-center bold" style="color:#28a745;">44.4%</td>
+                        <td class="text-center">53</td>
+                        <td class="text-center">60.4%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">S/ 251+</td>
+                        <td class="text-center">346</td>
+                        <td class="text-center">32</td>
+                        <td class="text-center">9.2%</td>
+                        <td class="text-center bold" style="color:#28a745;">11</td>
+                        <td class="text-center">34.4%</td>
+                        <td class="text-center">18</td>
+                        <td class="text-center">61.1%</td>
+                    </tr>
+                    <tr style="background:#f8f9fa;">
+                        <td class="bold">Total</td>
+                        <td class="text-center bold">2,620</td>
+                        <td class="text-center bold">212</td>
+                        <td class="text-center bold">8.1%</td>
+                        <td class="text-center bold" style="color:#28a745;">92</td>
+                        <td class="text-center bold" style="color:#28a745;">43.4%</td>
+                        <td class="text-center bold">143</td>
+                        <td class="text-center bold">64.3%</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 style="font-size:14px; color:#004481; margin-bottom:12px;">Pasarela por rango</h3>
+            <table class="detail-table" style="margin-bottom:20px;">
+                <thead>
+                    <tr>
+                        <th>Rango</th>
+                        <th class="text-center">Monnet</th>
+                        <th class="text-center">BBVA QR</th>
+                        <th class="text-center">Mercado Pago</th>
+                        <th class="text-center">BBVA Recaudo</th>
+                        <th class="text-center">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="bold">S/ 0 - 50</td>
+                        <td class="text-center">1 (7.7%)</td>
+                        <td class="text-center bold" style="color:#28a745;">5 (38.5%)</td>
+                        <td class="text-center">6 (46.2%)</td>
+                        <td class="text-center">1 (7.7%)</td>
+                        <td class="text-center bold">13</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">S/ 51 - 150</td>
+                        <td class="text-center">42 (44.2%)</td>
+                        <td class="text-center bold" style="color:#28a745;">44 (46.3%)</td>
+                        <td class="text-center">7 (7.4%)</td>
+                        <td class="text-center">2 (2.1%)</td>
+                        <td class="text-center bold">95</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">S/ 151 - 250</td>
+                        <td class="text-center">37 (51.4%)</td>
+                        <td class="text-center bold" style="color:#28a745;">32 (44.4%)</td>
+                        <td class="text-center">2 (2.8%)</td>
+                        <td class="text-center">1 (1.4%)</td>
+                        <td class="text-center bold">72</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">S/ 251+</td>
+                        <td class="text-center">17 (53.1%)</td>
+                        <td class="text-center bold" style="color:#28a745;">11 (34.4%)</td>
+                        <td class="text-center">2 (6.3%)</td>
+                        <td class="text-center">2 (6.3%)</td>
+                        <td class="text-center bold">32</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="note" style="background:#e8f5e9; border-left-color:#28a745; color:#1b5e20;">
+                <strong>Hallazgos tempranos:</strong>
+                <ul style="margin-top:8px; padding-left:20px;">
+                    <li><strong>S/ 51-150:</strong> Mejor segmento para QR: 46.3% de pagos via QR (supera a Monnet), conversion 68.8%. Consistente con el piloto.</li>
+                    <li><strong>S/ 151-250:</strong> QR casi empata a Monnet (44.4% vs 51.4%). Mejora notable vs piloto (22.2%).</li>
+                    <li><strong>S/ 0-50:</strong> MP domina (46.2%), QR segundo (38.5%). Similar al piloto.</li>
+                    <li><strong>S/ 251+:</strong> Monnet lidera (53.1%), QR tercero. Conversion QR 61.1% es buena pero menor adopcion.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Section 9: Trazabilidad QR Fase 2 -->
+        <div class="section">
+            <h2><span class="num">10</span> Trazabilidad QR (Fase 2 - 48h) <span class="new-badge">Nuevo</span></h2>
+            <p style="color:#666; font-size:14px; margin-bottom:12px;">155 QRs generados por 143 clientes. Status de los QRs:</p>
+
+            <table style="margin-bottom:20px;">
+                <thead>
+                    <tr>
+                        <th>Status QR</th>
+                        <th class="text-center">Cantidad</th>
+                        <th class="text-center">%</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="status-badge status-paid">Paid</span></td>
+                        <td class="text-center bold">92</td>
+                        <td class="text-center">59.4%</td>
+                    </tr>
+                    <tr>
+                        <td><span class="status-badge status-pending">Pending</span></td>
+                        <td class="text-center bold">51</td>
+                        <td class="text-center">32.9%</td>
+                    </tr>
+                    <tr>
+                        <td><span class="status-badge status-cancelled">Cancelled</span></td>
+                        <td class="text-center bold">12</td>
+                        <td class="text-center">7.7%</td>
+                    </tr>
+                    <tr style="background:#f8f9fa;">
+                        <td class="bold">Total</td>
+                        <td class="text-center bold">155</td>
+                        <td class="text-center bold">100%</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 style="font-size:14px; color:#004481; margin-bottom:12px;">QRs generados por cliente</h3>
+            <table class="detail-table" style="margin-bottom:20px;">
+                <thead>
+                    <tr>
+                        <th>QRs generados</th>
+                        <th class="text-center">Clientes</th>
+                        <th class="text-center">%</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="bold">1 QR</td>
+                        <td class="text-center bold">132</td>
+                        <td class="text-center">92.3%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">2 QRs</td>
+                        <td class="text-center bold">10</td>
+                        <td class="text-center">7.0%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">3 QRs</td>
+                        <td class="text-center bold">1</td>
+                        <td class="text-center">0.7%</td>
+                    </tr>
+                    <tr style="background:#f8f9fa;">
+                        <td class="bold">Total</td>
+                        <td class="text-center bold">143</td>
+                        <td class="text-center bold">100%</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 style="font-size:14px; color:#004481; margin-bottom:12px;">QRs pending/cancelled: que paso con esos clientes</h3>
+            <p style="color:#666; font-size:14px; margin-bottom:16px;">De los clientes con QR no pagado: 33 migraron a otro medio, 22 aun no pagan (muchas cuotas no han vencido).</p>
+
+            <table class="detail-table" style="margin-bottom:20px;">
+                <thead>
+                    <tr>
+                        <th>Tiempo de migracion</th>
+                        <th class="text-center">Clientes</th>
+                        <th class="text-center">%</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Menos de 1 minuto</td>
+                        <td class="text-center bold">4</td>
+                        <td class="text-center">12.1%</td>
+                    </tr>
+                    <tr>
+                        <td>1 a 10 minutos</td>
+                        <td class="text-center bold">17</td>
+                        <td class="text-center">51.5%</td>
+                    </tr>
+                    <tr>
+                        <td>10 min a 1 hora</td>
+                        <td class="text-center bold">6</td>
+                        <td class="text-center">18.2%</td>
+                    </tr>
+                    <tr>
+                        <td>Mas de 1 hora</td>
+                        <td class="text-center bold">6</td>
+                        <td class="text-center">18.2%</td>
+                    </tr>
+                    <tr style="background:#f8f9fa;">
+                        <td class="bold">Total migraron</td>
+                        <td class="text-center bold">33</td>
+                        <td class="text-center bold">100%</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 style="font-size:14px; color:#004481; margin-bottom:12px;">Top 10 migraciones mas rapidas</h3>
+            <table class="detail-table" style="margin-bottom:20px;">
+                <thead>
+                    <tr>
+                        <th>Solicitud</th>
+                        <th>QR generado</th>
+                        <th>Pago alterno</th>
+                        <th class="text-center">Diferencia</th>
+                        <th class="text-right">Monto QR</th>
+                        <th class="text-right">Monto pagado</th>
+                        <th>Pasarela</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="bold">103359</td>
+                        <td>11/06 09:31:42</td>
+                        <td>11/06 09:31:52</td>
+                        <td class="text-center bold" style="color:#e8590c;">10 seg</td>
+                        <td class="text-right">S/ 168</td>
+                        <td class="text-right">S/ 167</td>
+                        <td>Monnet</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">91147</td>
+                        <td>10/06 20:06:52</td>
+                        <td>10/06 20:07:16</td>
+                        <td class="text-center bold" style="color:#e8590c;">24 seg</td>
+                        <td class="text-right">S/ 35</td>
+                        <td class="text-right">S/ 36</td>
+                        <td>BBVA QR</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">78362</td>
+                        <td>10/06 15:42:18</td>
+                        <td>10/06 15:42:45</td>
+                        <td class="text-center bold" style="color:#e8590c;">27 seg</td>
+                        <td class="text-right">S/ 218</td>
+                        <td class="text-right">S/ 217</td>
+                        <td>Monnet</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">50197</td>
+                        <td>10/06 17:34:09</td>
+                        <td>10/06 17:34:37</td>
+                        <td class="text-center bold" style="color:#e8590c;">28 seg</td>
+                        <td class="text-right">S/ 154</td>
+                        <td class="text-right">S/ 153</td>
+                        <td>Monnet</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">95400</td>
+                        <td>10/06 22:33:39</td>
+                        <td>10/06 22:35:10</td>
+                        <td class="text-center bold" style="color:#e8590c;">1.5 min</td>
+                        <td class="text-right">S/ 177</td>
+                        <td class="text-right">S/ 177</td>
+                        <td>BBVA QR</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">75623</td>
+                        <td>11/06 10:08:49</td>
+                        <td>11/06 10:10:43</td>
+                        <td class="text-center bold" style="color:#e8590c;">1.9 min</td>
+                        <td class="text-right">S/ 284</td>
+                        <td class="text-right">S/ 284</td>
+                        <td>Mercado Pago</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">75009</td>
+                        <td>10/06 20:02:33</td>
+                        <td>10/06 20:04:32</td>
+                        <td class="text-center bold" style="color:#e8590c;">2.0 min</td>
+                        <td class="text-right">S/ 78</td>
+                        <td class="text-right">S/ 79</td>
+                        <td>Monnet</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">74792</td>
+                        <td>11/06 08:21:32</td>
+                        <td>11/06 08:23:57</td>
+                        <td class="text-center bold" style="color:#e8590c;">2.4 min</td>
+                        <td class="text-right">S/ 212</td>
+                        <td class="text-right">S/ 212</td>
+                        <td>Monnet</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">87323</td>
+                        <td>10/06 19:46:37</td>
+                        <td>10/06 19:49:07</td>
+                        <td class="text-center bold" style="color:#e8590c;">2.5 min</td>
+                        <td class="text-right">S/ 256</td>
+                        <td class="text-right">S/ 256</td>
+                        <td>Monnet</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">80529</td>
+                        <td>11/06 00:13:08</td>
+                        <td>11/06 00:16:03</td>
+                        <td class="text-center bold" style="color:#e8590c;">2.9 min</td>
+                        <td class="text-right">S/ 80</td>
+                        <td class="text-right">S/ 80</td>
+                        <td>Monnet</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="note">
+                <strong>Patron:</strong> El 63.6% de migraciones ocurrio en menos de 10 minutos (vs 76.3% en piloto). La diferencia de S/ 1 entre monto QR y monto pagado via Monnet sigue siendo sistematica. Los 22 clientes con QR sin pago mayormente tienen cuotas que aun no vencen (15-18 jun).
+            </div>
+        </div>
+
+        <!-- ===== SEPARADOR: RESULTADOS PILOTO ===== -->
+        <hr class="divider">
+        <p class="section-title">Resultados del Piloto (Mayo 2026)</p>
+        <p class="section-subtitle">232 clientes con cuota 25/05 &mdash; Corte 07/06 (13 dias) &mdash; Sin campana de cobranza</p>
+
+        <!-- KPI Piloto -->
+        <div class="kpi-grid" style="margin-top:24px;">
+            <div class="kpi-card">
+                <div class="kpi-label">Cobranza (de 232)</div>
+                <div class="kpi-value">91%</div>
+                <div class="kpi-sub">211 pagaron, 21 pendientes</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Pagaron con QR</div>
+                <div class="kpi-value">30.8%</div>
+                <div class="kpi-sub">65 de 211 pagos</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Interactuaron con QR</div>
+                <div class="kpi-value">109</div>
+                <div class="kpi-sub">65 QR + 38 migraron + 2 sin pago</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Errores tecnicos</div>
+                <div class="kpi-value">0%</div>
+                <div class="kpi-sub">116 QRs sin fallas</div>
+            </div>
+        </div>
+
+        <!-- Section 5: Distribucion de pagos piloto -->
+        <div class="section">
+            <h2><span class="num">11</span> Distribucion de pagos (piloto 13 dias)</h2>
+            <p style="color:#666; font-size:14px; margin-bottom:20px;">De 281 con cuota mayo, 49 pagaron antes del QR. Base efectiva: 232. De esos, 211 pagaron (91%).</p>
+
+            <table style="margin-bottom:20px;">
+                <thead>
+                    <tr>
+                        <th>Categoria</th>
+                        <th class="text-center">Clientes</th>
+                        <th class="text-center">% de 211</th>
+                        <th>Detalle</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="bold" style="color:#28a745;">Pagaron con QR</td>
+                        <td class="text-center bold" style="color:#28a745;">65</td>
+                        <td class="text-center bold" style="color:#28a745;">30.8%</td>
+                        <td style="color:#666;">Generaron QR y completaron pago</td>
+                    </tr>
+                    <tr>
+                        <td class="bold" style="color:#e8590c;">QR &rarr; migraron a otro</td>
+                        <td class="text-center bold" style="color:#e8590c;">38</td>
+                        <td class="text-center bold" style="color:#e8590c;">18.0%</td>
+                        <td style="color:#666;">Generaron QR, pagaron via Monnet (35), MP (1), Recaudo (2)</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">Monnet directo</td>
+                        <td class="text-center bold">90</td>
+                        <td class="text-center">42.7%</td>
+                        <td style="color:#666;">Sin interaccion con QR</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">Mercado Pago directo</td>
+                        <td class="text-center bold">11</td>
+                        <td class="text-center">5.2%</td>
+                        <td style="color:#666;">Sin interaccion con QR</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">BBVA Recaudo directo</td>
+                        <td class="text-center bold">7</td>
+                        <td class="text-center">3.3%</td>
+                        <td style="color:#666;">Pago via recaudo bancario</td>
+                    </tr>
+                    <tr style="background:#f8f9fa;">
+                        <td class="bold">Total pagos</td>
+                        <td class="text-center bold">211</td>
+                        <td class="text-center bold">100%</td>
+                        <td></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div style="margin-bottom: 12px;">
+                <div class="bar-container">
+                    <div class="bar-bg" style="height:36px;">
+                        <div style="display:flex; height:100%;">
+                            <div style="width:30.8%; background:#28a745; display:flex; align-items:center; justify-content:center; color:white; font-size:11px; font-weight:600; border-radius:6px 0 0 6px;">QR 30.8%</div>
+                            <div style="width:18.0%; background:#ffc107; display:flex; align-items:center; justify-content:center; color:#665200; font-size:11px; font-weight:600;">QR&rarr;otro 18%</div>
+                            <div style="width:42.7%; background:#004481; display:flex; align-items:center; justify-content:center; color:white; font-size:11px; font-weight:600;">Monnet 42.7%</div>
+                            <div style="width:8.5%; background:#6f42c1; display:flex; align-items:center; justify-content:center; color:white; font-size:10px; font-weight:600; border-radius:0 6px 6px 0;">MP+Rec 8.5%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="note" style="background:#e8f5e9; border-left-color:#28a745; color:#1b5e20;">
+                <strong>Lectura clave:</strong> El QR capturo el <strong>30.8%</strong> de los pagos en 13 dias. Sumando migraciones, el <strong>48.8% de los pagos (103 de 211)</strong> provinieron de clientes que interactuaron con el QR.
+            </div>
+        </div>
+
+        <!-- Section 6: Banco seleccionado -->
+        <div class="section">
+            <h2><span class="num">12</span> Banco seleccionado por pasarela (piloto)</h2>
+
+            <h3 style="font-size:14px; color:#004481; margin-bottom:12px;">Monnet: banco seleccionado (125 clientes)</h3>
+            <table style="margin-bottom:24px;">
+                <thead>
+                    <tr>
+                        <th>Banco/Metodo</th>
+                        <th class="text-center">Clientes</th>
+                        <th class="text-center">%</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="bold" style="color:#6f21a8;">Yape</td>
+                        <td class="text-center bold">102</td>
+                        <td class="text-center bold">81.0%</td>
+                        <td><div style="width:81%; height:18px; background:#6f21a8; border-radius:4px;"></div></td>
+                    </tr>
+                    <tr>
+                        <td class="bold" style="color:#004481;">BCP</td>
+                        <td class="text-center bold">16</td>
+                        <td class="text-center">12.7%</td>
+                        <td><div style="width:12.7%; height:18px; background:#004481; border-radius:4px;"></div></td>
+                    </tr>
+                    <tr>
+                        <td class="bold" style="color:#0066b3;">BBVA</td>
+                        <td class="text-center bold">4</td>
+                        <td class="text-center">3.2%</td>
+                        <td><div style="width:3.2%; height:18px; background:#0066b3; border-radius:4px; min-width:8px;"></div></td>
+                    </tr>
+                    <tr>
+                        <td class="bold" style="color:#28a745;">Interbank</td>
+                        <td class="text-center bold">4</td>
+                        <td class="text-center">3.2%</td>
+                        <td><div style="width:3.2%; height:18px; background:#28a745; border-radius:4px; min-width:8px;"></div></td>
+                    </tr>
+                    <tr style="background:#f8f9fa;">
+                        <td class="bold">Total</td>
+                        <td class="text-center bold">126</td>
+                        <td class="text-center bold">100%</td>
+                        <td></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 style="font-size:14px; color:#004481; margin-bottom:12px;">Mercado Pago: metodo de pago (12 clientes)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Metodo</th>
+                        <th class="text-center">Clientes</th>
+                        <th class="text-center">%</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="bold">PagoEfectivo (ATM/agente)</td>
+                        <td class="text-center bold">6</td>
+                        <td class="text-center">50.0%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold" style="color:#6f21a8;">Yape</td>
+                        <td class="text-center bold">3</td>
+                        <td class="text-center">25.0%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold" style="color:#004481;">BCP</td>
+                        <td class="text-center bold">2</td>
+                        <td class="text-center">16.7%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold" style="color:#28a745;">Interbank</td>
+                        <td class="text-center bold">1</td>
+                        <td class="text-center">8.3%</td>
+                    </tr>
+                    <tr style="background:#f8f9fa;">
+                        <td class="bold">Total</td>
+                        <td class="text-center bold">12</td>
+                        <td class="text-center bold">100%</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="note" style="background:#e8f5e9; border-left-color:#28a745; color:#1b5e20;">
+                <strong>Hallazgo:</strong> Yape domina Monnet con <strong>81%</strong>. Solo 4 clientes (3.2%) eligieron BBVA dentro de Monnet. En MP, PagoEfectivo es el mas usado (50%).
+            </div>
+        </div>
+
+        <!-- Section 7: Evolucion diaria -->
+        <div class="section">
+            <h2><span class="num">13</span> Evolucion diaria de pagos (piloto)</h2>
+            <table class="detail-table">
+                <thead>
+                    <tr>
+                        <th>Dia</th>
+                        <th class="text-center">Monnet</th>
+                        <th class="text-center">BBVA QR</th>
+                        <th class="text-center">MP</th>
+                        <th class="text-center">Recaudo</th>
+                        <th class="text-center">Total</th>
+                        <th class="text-center">% QR</th>
+                        <th class="text-center">Acum.</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="bold">25/05*</td>
+                        <td class="text-center">16</td>
+                        <td class="text-center bold" style="color:#28a745;">6</td>
+                        <td class="text-center">1</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center bold">23</td>
+                        <td class="text-center" style="color:#28a745;">26.1%</td>
+                        <td class="text-center">23</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">26/05</td>
+                        <td class="text-center">46</td>
+                        <td class="text-center bold" style="color:#28a745;">18</td>
+                        <td class="text-center">1</td>
+                        <td class="text-center">2</td>
+                        <td class="text-center bold">67</td>
+                        <td class="text-center" style="color:#28a745;">26.9%</td>
+                        <td class="text-center">90</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">27/05</td>
+                        <td class="text-center">20</td>
+                        <td class="text-center bold" style="color:#28a745;">17</td>
+                        <td class="text-center">3</td>
+                        <td class="text-center">3</td>
+                        <td class="text-center bold">43</td>
+                        <td class="text-center bold" style="color:#28a745;">39.5%</td>
+                        <td class="text-center">133</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">28/05</td>
+                        <td class="text-center">13</td>
+                        <td class="text-center bold" style="color:#28a745;">7</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">1</td>
+                        <td class="text-center bold">21</td>
+                        <td class="text-center" style="color:#28a745;">33.3%</td>
+                        <td class="text-center">154</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">29/05</td>
+                        <td class="text-center">11</td>
+                        <td class="text-center bold" style="color:#28a745;">5</td>
+                        <td class="text-center">3</td>
+                        <td class="text-center">1</td>
+                        <td class="text-center bold">20</td>
+                        <td class="text-center" style="color:#28a745;">25.0%</td>
+                        <td class="text-center">174</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">30/05</td>
+                        <td class="text-center">5</td>
+                        <td class="text-center bold" style="color:#28a745;">4</td>
+                        <td class="text-center">1</td>
+                        <td class="text-center">2</td>
+                        <td class="text-center bold">12</td>
+                        <td class="text-center" style="color:#28a745;">33.3%</td>
+                        <td class="text-center">186</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">31/05</td>
+                        <td class="text-center">2</td>
+                        <td class="text-center bold" style="color:#28a745;">3</td>
+                        <td class="text-center">2</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center bold">7</td>
+                        <td class="text-center" style="color:#28a745;">42.9%</td>
+                        <td class="text-center">193</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">01-03/06</td>
+                        <td class="text-center">12</td>
+                        <td class="text-center bold" style="color:#28a745;">4</td>
+                        <td class="text-center">1</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center bold">17</td>
+                        <td class="text-center" style="color:#28a745;">23.5%</td>
+                        <td class="text-center">210</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">04-06/06</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center bold" style="color:#28a745;">1</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center bold">1</td>
+                        <td class="text-center bold" style="color:#28a745;">100%</td>
+                        <td class="text-center">211</td>
+                    </tr>
+                    <tr style="background:#f8f9fa;">
+                        <td class="bold">Total</td>
+                        <td class="text-center bold">125</td>
+                        <td class="text-center bold" style="color:#28a745;">65</td>
+                        <td class="text-center bold">12</td>
+                        <td class="text-center bold">9</td>
+                        <td class="text-center bold">211</td>
+                        <td class="text-center bold" style="color:#28a745;">30.8%</td>
+                        <td class="text-center bold">211</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p style="color:#666; font-size:12px; margin-top:4px;">* 25/05: desde las 17:00.</p>
+
+            <div class="note">
+                <strong>Patron:</strong> 63% de los pagos se concentro en los primeros 3 dias. El % de QR crecio con el tiempo, sugiriendo que pagadores tardios prefieren QR.
+            </div>
+        </div>
+
+        <!-- Section 8: Segmentacion por monto -->
+        <div class="section">
+            <h2><span class="num">14</span> Segmentacion por monto de cuota (piloto)</h2>
+
+            <table style="margin-bottom:24px;">
+                <thead>
+                    <tr>
+                        <th>Rango</th>
+                        <th class="text-center">Base</th>
+                        <th class="text-center">Pagaron</th>
+                        <th class="text-center">% Cobranza</th>
+                        <th class="text-center">Via QR</th>
+                        <th class="text-center">% QR</th>
+                        <th class="text-center">Conversion QR</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="bold">S/ 0 - 50</td>
+                        <td class="text-center">8</td>
+                        <td class="text-center">6</td>
+                        <td class="text-center">75.0%</td>
+                        <td class="text-center bold" style="color:#28a745;">2</td>
+                        <td class="text-center" style="color:#28a745;">33.3%</td>
+                        <td class="text-center bold" style="color:#28a745;">100%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">S/ 51 - 150</td>
+                        <td class="text-center">79</td>
+                        <td class="text-center">71</td>
+                        <td class="text-center">89.9%</td>
+                        <td class="text-center bold" style="color:#28a745;">27</td>
+                        <td class="text-center bold" style="color:#28a745;">38.0%</td>
+                        <td class="text-center bold" style="color:#28a745;">71.1%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">S/ 151 - 250</td>
+                        <td class="text-center">96</td>
+                        <td class="text-center">90</td>
+                        <td class="text-center">93.8%</td>
+                        <td class="text-center bold" style="color:#28a745;">20</td>
+                        <td class="text-center">22.2%</td>
+                        <td class="text-center">50.0%</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">S/ 251+</td>
+                        <td class="text-center">49</td>
+                        <td class="text-center">44</td>
+                        <td class="text-center">89.8%</td>
+                        <td class="text-center bold" style="color:#28a745;">16</td>
+                        <td class="text-center bold" style="color:#28a745;">36.4%</td>
+                        <td class="text-center bold" style="color:#28a745;">69.6%</td>
+                    </tr>
+                    <tr style="background:#f8f9fa;">
+                        <td class="bold">Total</td>
+                        <td class="text-center bold">232</td>
+                        <td class="text-center bold">211</td>
+                        <td class="text-center bold">90.9%</td>
+                        <td class="text-center bold" style="color:#28a745;">65</td>
+                        <td class="text-center bold" style="color:#28a745;">30.8%</td>
+                        <td class="text-center bold">59.6%</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Barras de conversion -->
+            <div style="margin-top:20px;">
+                <p style="font-size:13px; color:#666; margin-bottom:12px;"><strong>Conversion QR por rango</strong> (de los que generaron QR, cuantos pagaron)</p>
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <span style="min-width:90px; font-size:13px; font-weight:600;">S/ 0-50</span>
+                        <div style="flex:1; height:24px; background:#f0f2f5; border-radius:4px; overflow:hidden;">
+                            <div style="width:100%; height:100%; background:#28a745; display:flex; align-items:center; justify-content:center; color:white; font-size:11px; font-weight:600;">100% (2/2)</div>
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <span style="min-width:90px; font-size:13px; font-weight:600;">S/ 51-150</span>
+                        <div style="flex:1; height:24px; background:#f0f2f5; border-radius:4px; overflow:hidden;">
+                            <div style="width:71.1%; height:100%; background:#28a745; display:flex; align-items:center; justify-content:center; color:white; font-size:11px; font-weight:600;">71.1% (27/38)</div>
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <span style="min-width:90px; font-size:13px; font-weight:600;">S/ 151-250</span>
+                        <div style="flex:1; height:24px; background:#f0f2f5; border-radius:4px; overflow:hidden;">
+                            <div style="width:50%; height:100%; background:#ffc107; display:flex; align-items:center; justify-content:center; color:#665200; font-size:11px; font-weight:600;">50.0% (20/40)</div>
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <span style="min-width:90px; font-size:13px; font-weight:600;">S/ 251+</span>
+                        <div style="flex:1; height:24px; background:#f0f2f5; border-radius:4px; overflow:hidden;">
+                            <div style="width:69.6%; height:100%; background:#28a745; display:flex; align-items:center; justify-content:center; color:white; font-size:11px; font-weight:600;">69.6% (16/23)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="note" style="background:#e8f5e9; border-left-color:#28a745; color:#1b5e20;">
+                <strong>Hallazgos:</strong> Mejor segmento para QR: S/ 51-150 (38% de pagos, 71% conversion). Cuotas altas (S/ 251+) sorprendentemente buena adopcion (36.4%, 69.6% conversion). S/ 151-250 muestra mayor migracion a Monnet (50% conversion).
+            </div>
+        </div>
+
+        <!-- Section 9: Trazabilidad resumida -->
+        <div class="section">
+            <h2><span class="num">15</span> Trazabilidad: migraciones QR &rarr; otro medio (piloto)</h2>
+            <p style="color:#666; font-size:14px; margin-bottom:20px;">De 46 QRs no completados, 38 clientes pagaron por otro medio. Tiempo de migracion:</p>
+            <table class="detail-table">
+                <thead>
+                    <tr>
+                        <th>Tiempo de migracion</th>
+                        <th class="text-center">Clientes</th>
+                        <th class="text-center">%</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Menos de 1 minuto</td>
+                        <td class="text-center bold">14</td>
+                        <td class="text-center">36.8%</td>
+                    </tr>
+                    <tr>
+                        <td>1 a 10 minutos</td>
+                        <td class="text-center bold">15</td>
+                        <td class="text-center">39.5%</td>
+                    </tr>
+                    <tr>
+                        <td>10 min a 1 hora</td>
+                        <td class="text-center bold">5</td>
+                        <td class="text-center">13.2%</td>
+                    </tr>
+                    <tr>
+                        <td>Mas de 1 hora</td>
+                        <td class="text-center bold">4</td>
+                        <td class="text-center">10.5%</td>
+                    </tr>
+                    <tr style="background:#f8f9fa;">
+                        <td class="bold">Total</td>
+                        <td class="text-center bold">38</td>
+                        <td class="text-center bold">100%</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="note">
+                <strong>Patron:</strong> 76.3% migro en menos de 10 min. Mediana ~1.5 min. Confirma que los clientes ven ambas opciones y eligen rapidamente. Solo 2 clientes (sol. 16210 y 25993) generaron QR y no pagaron por ningun medio.
+            </div>
+        </div>
+
+        <!-- Section 10: Comparativa -->
+        <div class="section">
+            <h2><span class="num">16</span> Resumen ejecutivo del piloto</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Metrica</th>
+                        <th class="text-center">Reporte 24h</th>
+                        <th class="text-center">Reporte 13 dias</th>
+                        <th class="text-center">Cambio</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="bold">Pagos totales</td>
+                        <td class="text-center">64</td>
+                        <td class="text-center bold">211</td>
+                        <td class="text-center bold" style="color:#28a745;">+147</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">Pagos via QR</td>
+                        <td class="text-center">14</td>
+                        <td class="text-center bold">65</td>
+                        <td class="text-center bold" style="color:#28a745;">+51</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">% QR sobre pagos</td>
+                        <td class="text-center">21.9%</td>
+                        <td class="text-center bold">30.8%</td>
+                        <td class="text-center bold" style="color:#28a745;">+8.9pp</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">% interaccion QR</td>
+                        <td class="text-center">42.2%</td>
+                        <td class="text-center bold">48.8%</td>
+                        <td class="text-center bold" style="color:#28a745;">+6.6pp</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">% cobranza</td>
+                        <td class="text-center">25.8%</td>
+                        <td class="text-center bold">90.9%</td>
+                        <td class="text-center bold" style="color:#28a745;">+65.1pp</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">Pendientes</td>
+                        <td class="text-center">184</td>
+                        <td class="text-center bold">21</td>
+                        <td class="text-center bold" style="color:#28a745;">-163</td>
+                    </tr>
+                    <tr>
+                        <td class="bold">Errores tecnicos</td>
+                        <td class="text-center">0</td>
+                        <td class="text-center bold">0</td>
+                        <td class="text-center" style="color:#888;">sin cambio</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="note" style="background:#e8f5e9; border-left-color:#28a745; color:#1b5e20;">
+                <strong>Conclusion del piloto:</strong> QR BBVA capturo <strong>30.8% de los pagos</strong> con <strong>cero errores tecnicos</strong>. El 48.8% de los pagadores interactuo con el QR. Se cobraron 211 de 232 cuotas (91%). La adopcion crecio con el tiempo. Estos resultados sustentan la escalacion a la Fase 2 con 2,550 clientes y test A/B/C.
+            </div>
+        </div>
+
+        <!-- Section 11: Nota metodologica -->
+        <div class="section">
+            <h2><span class="num">17</span> Notas metodologicas</h2>
+            <div class="note">
+                <strong>Piloto (mayo):</strong> 300 solicitudes originales &rarr; 281 con cuota mayo &rarr; 49 pagaron antes del QR &rarr; Base efectiva: 232. Solo clientes sin campana de cobranza. Pagos filtrados por cuota especifica de mayo.
+            </div>
+            <div class="note" style="margin-top:12px;">
+                <strong>Experimento (junio):</strong> 2,550 clientes con cuotas venciendo entre 10-18 de junio. Asignados aleatoriamente a 4 grupos (Control, A, B, C) estratificados por fecha de vencimiento. Cada grupo tiene ~637-638 clientes con distribucion proporcional de fechas y montos similares.
+            </div>
+        </div>
+
+        <div class="footer">
+            BaldeCash &mdash; Reporte generado el 11 de junio de 2026
+        </div>
+    </div>
+</body>
+</html>
