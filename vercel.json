@@ -1,20 +1,16 @@
 {
-  "rewrites": [
-    { "source": "/", "destination": "/api/dashboard" }
-  ],
-  "functions": {
-    "api/dashboard.py": {
-      "runtime": "@vercel/python",
-      "maxDuration": 30,
-      "includeFiles": "api/cohort_ids.json"
-    }
-  },
-  "headers": [
+  "builds": [
     {
-      "source": "/api/dashboard",
-      "headers": [
-        { "key": "Cache-Control", "value": "s-maxage=300, stale-while-revalidate=60" }
-      ]
+      "src": "api/dashboard.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "15mb",
+        "includeFiles": ["api/cohort_ids.json"]
+      }
     }
+  ],
+  "routes": [
+    { "src": "/", "dest": "/api/dashboard" },
+    { "src": "/api/dashboard", "dest": "/api/dashboard" }
   ]
 }
