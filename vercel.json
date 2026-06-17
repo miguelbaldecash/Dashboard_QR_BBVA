@@ -1,10 +1,4 @@
 {
-  "functions": {
-    "api/dashboard.py": {
-      "runtime": "@vercel/python@4.5.0",
-      "maxDuration": 30
-    }
-  },
   "rewrites": [
     { "source": "/", "destination": "/api/dashboard" }
   ]
