@@ -1,0 +1,20 @@
+{
+  "rewrites": [
+    { "source": "/", "destination": "/api/dashboard" }
+  ],
+  "functions": {
+    "api/dashboard.py": {
+      "runtime": "@vercel/python",
+      "maxDuration": 30,
+      "includeFiles": "api/cohort_ids.json"
+    }
+  },
+  "headers": [
+    {
+      "source": "/api/dashboard",
+      "headers": [
+        { "key": "Cache-Control", "value": "s-maxage=300, stale-while-revalidate=60" }
+      ]
+    }
+  ]
+}
