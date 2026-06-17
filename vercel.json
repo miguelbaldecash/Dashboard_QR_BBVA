@@ -1,16 +1,11 @@
 {
-  "builds": [
-    {
-      "src": "api/dashboard.py",
-      "use": "@vercel/python",
-      "config": {
-        "maxLambdaSize": "15mb",
-        "includeFiles": ["api/cohort_ids.json"]
-      }
+  "functions": {
+    "api/dashboard.py": {
+      "runtime": "@vercel/python@4.5.0",
+      "maxDuration": 30
     }
-  ],
-  "routes": [
-    { "src": "/", "dest": "/api/dashboard" },
-    { "src": "/api/dashboard", "dest": "/api/dashboard" }
+  },
+  "rewrites": [
+    { "source": "/", "destination": "/api/dashboard" }
   ]
 }
