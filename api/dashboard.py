@@ -349,11 +349,11 @@ def render(d):
             daily_by_month[mes_key] = []
         daily_by_month[mes_key].append(dia)
 
-    # Build month filter options
+    # Build month filter options (enero a diciembre 2026)
     month_filter_options = ''
-    for mk in sorted(daily_by_month.keys()):
-        y_, m_ = mk.split('-')
-        label = f"{MESES_ES.get(int(m_), m_)} {y_}"
+    for m_ in range(1, 13):
+        mk = f"2026-{m_:02d}"
+        label = MESES_ES[m_]
         sel = ' selected' if mk == current_mes else ''
         month_filter_options += f'<option value="{mk}"{sel}>{label}</option>'
 
