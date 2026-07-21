@@ -1,7 +1,11 @@
-"""Vercel serverless function: Dashboard QR BBVA en tiempo real."""
-import os, json, pymysql
+"""Vercel serverless function: Dashboard QR BBVA en tiempo real.
+Muestra metricas del mes actual para TODAS las solicitudes con cuotas activas.
+Sin separacion por grupos (desde julio 2026).
+"""
+import os, pymysql
 from http.server import BaseHTTPRequestHandler
 from datetime import datetime, date
+from calendar import monthrange
 
 # --- Config ---
 DB = {
@@ -12,37 +16,50 @@ DB = {
     'connect_timeout': 15,
     'read_timeout': 30,
 }
-START = '2026-06-10 14:10:00'
-W_START = '2026-06-10'
-W_END = '2026-06-19'
 
-# --- Load cohort IDs ---
-_dir = os.path.dirname(__file__)
-with open(os.path.join(_dir, 'cohort_ids.json')) as f:
-    GROUPS = json.load(f)
-ALL_IDS = list(set(i for v in GROUPS.values() for i in v))
+MESES_ES = {1:'Enero',2:'Febrero',3:'Marzo',4:'Abril',5:'Mayo',6:'Junio',
+             7:'Julio',8:'Agosto',9:'Septiembre',10:'Octubre',11:'Noviembre',12:'Diciembre'}
 
-# --- DB queries ---
+
+def get_month_window():
+    """Return (start, end) for the current month."""
+    hoy = date.today()
+    w_start = f"{hoy.year}-{hoy.month:02d}-01"
+    _, last = monthrange(hoy.year, hoy.month)
+    if hoy.month == 12:
+        w_end = f"{hoy.year + 1}-01-01"
+    else:
+        w_end = f"{hoy.year}-{hoy.month + 1:02d}-01"
+    return w_start, w_end, hoy
+
+
 def get_data():
+    w_start, w_end, hoy = get_month_window()
     conn = pymysql.connect(**DB)
     cur = conn.cursor()
-    ph = ','.join(['%s'] * len(ALL_IDS))
-    d = {}
+    d = {'w_start': w_start, 'w_end': w_end, 'mes': MESES_ES[hoy.month], 'anio': hoy.year}
 
-    # Monto total cuotas
-    cur.execute(f"SELECT ROUND(SUM(c.monto),2) FROM cronograma c WHERE c.solicitud_id IN ({ph}) AND c.fecha_vencimiento >= '{W_START}' AND c.fecha_vencimiento < '{W_END}' AND c.estado='activo'", ALL_IDS)
-    d['monto_total'] = float(cur.fetchone()[0] or 0)
+    # --- Base: todas las cuotas activas en el mes ---
+    cur.execute("""SELECT COUNT(DISTINCT c.solicitud_id), COUNT(*), ROUND(SUM(c.monto),2)
+        FROM cronograma c WHERE c.estado='activo'
+        AND c.fecha_vencimiento >= %s AND c.fecha_vencimiento < %s""", (w_start, w_end))
+    r = cur.fetchone()
+    d['total_solicitudes'] = r[0]
+    d['total_cuotas'] = r[1]
+    d['monto_total'] = float(r[2] or 0)
 
-    # Cuota montos por solicitud
-    cur.execute(f"SELECT c.solicitud_id, ROUND(SUM(c.monto),2) FROM cronograma c WHERE c.solicitud_id IN ({ph}) AND c.fecha_vencimiento >= '{W_START}' AND c.fecha_vencimiento < '{W_END}' AND c.estado='activo' GROUP BY c.solicitud_id", ALL_IDS)
+    # Cuota monto por solicitud
+    cur.execute("""SELECT c.solicitud_id, ROUND(SUM(c.monto),2)
+        FROM cronograma c WHERE c.estado='activo'
+        AND c.fecha_vencimiento >= %s AND c.fecha_vencimiento < %s
+        GROUP BY c.solicitud_id""", (w_start, w_end))
     cuota_montos = {int(r[0]): float(r[1]) for r in cur.fetchall()}
 
-    # Pre-QR payers
-    cur.execute(f"SELECT DISTINCT c.solicitud_id FROM pago p JOIN cronograma c ON c.id=p.cronograma_id WHERE c.solicitud_id IN ({ph}) AND c.fecha_vencimiento >= '{W_START}' AND c.fecha_vencimiento < '{W_END}' AND c.estado='activo' AND p.deleted_at IS NULL AND p.fecha_pago < %s", ALL_IDS + [START])
-    pre_qr = set(int(r[0]) for r in cur.fetchall())
-
-    # Post-QR payers + pasarela
-    cur.execute(f"SELECT c.solicitud_id, p.pasarela_pago FROM pago p JOIN cronograma c ON c.id=p.cronograma_id WHERE c.solicitud_id IN ({ph}) AND c.fecha_vencimiento >= '{W_START}' AND c.fecha_vencimiento < '{W_END}' AND c.estado='activo' AND p.deleted_at IS NULL AND p.fecha_pago >= %s", ALL_IDS + [START])
+    # Pagos del mes por pasarela
+    cur.execute("""SELECT c.solicitud_id, p.pasarela_pago
+        FROM pago p JOIN cronograma c ON c.id=p.cronograma_id
+        WHERE c.estado='activo' AND c.fecha_vencimiento >= %s AND c.fecha_vencimiento < %s
+        AND p.deleted_at IS NULL""", (w_start, w_end))
     sol_pasarela = {}
     paid_set = set()
     for r in cur.fetchall():
@@ -50,61 +67,101 @@ def get_data():
         paid_set.add(sid)
         sol_pasarela[sid] = r[1]
 
-    # QR paid
-    cur.execute(f"SELECT DISTINCT q.solicitud_id FROM bbva_qr_payments q WHERE q.solicitud_id IN ({ph}) AND q.created_at >= %s AND q.status='paid'", ALL_IDS + [START])
-    qr_paid = set(int(r[0]) for r in cur.fetchall())
-
-    # QR generated
-    cur.execute(f"SELECT DISTINCT q.solicitud_id FROM bbva_qr_payments q WHERE q.solicitud_id IN ({ph}) AND q.created_at >= %s", ALL_IDS + [START])
-    qr_gen = set(int(r[0]) for r in cur.fetchall())
+    d['total_pagos'] = len(paid_set)
 
     # Monto cobrado
-    cur.execute(f"SELECT ROUND(SUM(p.monto_pago_total),2) FROM pago p JOIN cronograma c ON c.id=p.cronograma_id WHERE c.solicitud_id IN ({ph}) AND c.fecha_vencimiento >= '{W_START}' AND c.fecha_vencimiento < '{W_END}' AND c.estado='activo' AND p.deleted_at IS NULL AND p.fecha_pago >= %s", ALL_IDS + [START])
+    cur.execute("""SELECT ROUND(SUM(p.monto_pago_total),2)
+        FROM pago p JOIN cronograma c ON c.id=p.cronograma_id
+        WHERE c.estado='activo' AND c.fecha_vencimiento >= %s AND c.fecha_vencimiento < %s
+        AND p.deleted_at IS NULL""", (w_start, w_end))
     d['monto_cobrado'] = float(cur.fetchone()[0] or 0)
 
-    # --- Segmentacion por monto ---
-    def rango(m):
-        if m <= 50: return '0-50'
-        elif m <= 150: return '51-150'
-        elif m <= 250: return '151-250'
-        return '251+'
+    # Pasarela counts
+    pas_count = {}
+    for sid, pas in sol_pasarela.items():
+        key = _classify_pasarela(pas)
+        pas_count[key] = pas_count.get(key, 0) + 1
+    d['pas_count'] = pas_count
 
+    # QR metrics del mes
+    cur.execute("""SELECT COUNT(DISTINCT q.solicitud_id)
+        FROM bbva_qr_payments q WHERE q.status='paid'
+        AND q.created_at >= %s AND q.created_at < %s""", (w_start, w_end))
+    d['qr_paid'] = cur.fetchone()[0]
+
+    cur.execute("""SELECT COUNT(DISTINCT q.solicitud_id)
+        FROM bbva_qr_payments q
+        WHERE q.created_at >= %s AND q.created_at < %s""", (w_start, w_end))
+    d['qr_gen'] = cur.fetchone()[0]
+
+    cur.execute("""SELECT q.status, COUNT(*)
+        FROM bbva_qr_payments q
+        WHERE q.created_at >= %s AND q.created_at < %s
+        GROUP BY q.status""", (w_start, w_end))
+    d['qr_status'] = {r[0]: r[1] for r in cur.fetchall()}
+
+    cur.execute("""SELECT COUNT(*)
+        FROM bbva_qr_payments q
+        WHERE q.created_at >= %s AND q.created_at < %s""", (w_start, w_end))
+    d['qr_total'] = cur.fetchone()[0]
+
+    cur.execute("""SELECT COUNT(DISTINCT q.solicitud_id)
+        FROM bbva_qr_payments q
+        WHERE q.created_at >= %s AND q.created_at < %s""", (w_start, w_end))
+    d['qr_clientes'] = cur.fetchone()[0]
+
+    # QR por cliente
+    cur.execute("""SELECT cnt, COUNT(*) FROM (
+        SELECT q.solicitud_id, COUNT(*) AS cnt FROM bbva_qr_payments q
+        WHERE q.created_at >= %s AND q.created_at < %s
+        GROUP BY q.solicitud_id) t GROUP BY cnt ORDER BY cnt""", (w_start, w_end))
+    d['qr_por_cliente'] = [(r[0], r[1]) for r in cur.fetchall()]
+
+    # --- Segmentacion por monto ---
     ranges_order = ['0-50', '51-150', '151-250', '251+']
-    R = {r: {'base': 0, 'pagaron': 0, 'qr_paid': 0, 'qr_gen': 0, 'monnet': 0, 'bbva_qr': 0, 'mp': 0, 'recaudo': 0} for r in ranges_order}
+    R = {r: {'base': 0, 'pagaron': 0, 'qr_paid': 0, 'qr_gen': 0,
+             'monnet': 0, 'bbva_qr': 0, 'mp': 0, 'recaudo': 0} for r in ranges_order}
+
+    qr_paid_set = set()
+    cur.execute("""SELECT DISTINCT q.solicitud_id FROM bbva_qr_payments q
+        WHERE q.status='paid' AND q.created_at >= %s AND q.created_at < %s""", (w_start, w_end))
+    for r in cur.fetchall():
+        qr_paid_set.add(int(r[0]))
+
+    qr_gen_set = set()
+    cur.execute("""SELECT DISTINCT q.solicitud_id FROM bbva_qr_payments q
+        WHERE q.created_at >= %s AND q.created_at < %s""", (w_start, w_end))
+    for r in cur.fetchall():
+        qr_gen_set.add(int(r[0]))
+
     for sid, m in cuota_montos.items():
-        if sid in pre_qr: continue
-        r = rango(m)
-        R[r]['base'] += 1
+        rng = _rango(m)
+        R[rng]['base'] += 1
         if sid in paid_set:
-            R[r]['pagaron'] += 1
+            R[rng]['pagaron'] += 1
             pas = sol_pasarela.get(sid, '')
-            if 'MONNET' in pas: R[r]['monnet'] += 1
-            elif 'QR' in pas: R[r]['bbva_qr'] += 1
-            elif 'MERCADO' in pas: R[r]['mp'] += 1
-            elif 'RECAUDO' in pas or 'BK' in pas: R[r]['recaudo'] += 1
-        if sid in qr_paid: R[r]['qr_paid'] += 1
-        if sid in qr_gen: R[r]['qr_gen'] += 1
+            if 'MONNET' in pas: R[rng]['monnet'] += 1
+            elif 'QR' in pas: R[rng]['bbva_qr'] += 1
+            elif 'MERCADO' in pas: R[rng]['mp'] += 1
+            elif 'RECAUDO' in pas or 'BK' in pas: R[rng]['recaudo'] += 1
+        if sid in qr_paid_set: R[rng]['qr_paid'] += 1
+        if sid in qr_gen_set: R[rng]['qr_gen'] += 1
+
     d['por_monto'] = R
     d['ranges_order'] = ranges_order
-
-    base_total = sum(v['base'] for v in R.values())
-    pagos_total = sum(v['pagaron'] for v in R.values())
-    d['base_efectiva'] = base_total
-    d['total_cuotas'] = len(cuota_montos)
-    d['pre_qr'] = len(pre_qr)
-    d['total_pagos'] = pagos_total
-    d['cuota_promedio'] = round(d['monto_total'] / len(cuota_montos), 2) if cuota_montos else 0
+    d['cuota_promedio'] = round(d['monto_total'] / d['total_solicitudes'], 2) if d['total_solicitudes'] else 0
 
     # --- Evolucion diaria ---
-    cur.execute(f"""SELECT DATE(p.fecha_pago) AS dia, p.pasarela_pago, COUNT(DISTINCT c.solicitud_id)
+    cur.execute("""SELECT DATE(p.fecha_pago) AS dia, p.pasarela_pago, COUNT(DISTINCT c.solicitud_id)
         FROM pago p JOIN cronograma c ON c.id=p.cronograma_id
-        WHERE c.solicitud_id IN ({ph}) AND c.fecha_vencimiento >= '{W_START}' AND c.fecha_vencimiento < '{W_END}'
-        AND c.estado='activo' AND p.deleted_at IS NULL AND p.fecha_pago >= %s
-        GROUP BY dia, p.pasarela_pago ORDER BY dia""", ALL_IDS + [START])
+        WHERE c.estado='activo' AND c.fecha_vencimiento >= %s AND c.fecha_vencimiento < %s
+        AND p.deleted_at IS NULL
+        GROUP BY dia, p.pasarela_pago ORDER BY dia""", (w_start, w_end))
     daily_raw = {}
     for r in cur.fetchall():
         dia = str(r[0])
-        if dia not in daily_raw: daily_raw[dia] = {'monnet': 0, 'bbva_qr': 0, 'mp': 0, 'otros': 0}
+        if dia not in daily_raw:
+            daily_raw[dia] = {'monnet': 0, 'bbva_qr': 0, 'mp': 0, 'otros': 0}
         pas = r[1]
         if 'MONNET' in pas: daily_raw[dia]['monnet'] += r[2]
         elif 'QR' in pas: daily_raw[dia]['bbva_qr'] += r[2]
@@ -112,108 +169,136 @@ def get_data():
         else: daily_raw[dia]['otros'] += r[2]
     d['diario'] = daily_raw
 
-    # --- Por grupo ---
-    d['grupos'] = {}
-    for gname, gids in GROUPS.items():
-        gph = ','.join(['%s'] * len(gids))
-        cur.execute(f"SELECT COUNT(DISTINCT c.solicitud_id) FROM cronograma c WHERE c.solicitud_id IN ({gph}) AND c.fecha_vencimiento >= '{W_START}' AND c.fecha_vencimiento < '{W_END}' AND c.estado='activo'", gids)
-        total = cur.fetchone()[0]
-        cur.execute(f"SELECT COUNT(DISTINCT c.solicitud_id) FROM pago p JOIN cronograma c ON c.id=p.cronograma_id WHERE c.solicitud_id IN ({gph}) AND c.fecha_vencimiento >= '{W_START}' AND c.fecha_vencimiento < '{W_END}' AND c.estado='activo' AND p.deleted_at IS NULL AND p.fecha_pago < %s", gids + [START])
-        gpre = cur.fetchone()[0]
-        cur.execute(f"SELECT p.pasarela_pago, COUNT(DISTINCT c.solicitud_id) FROM pago p JOIN cronograma c ON c.id=p.cronograma_id WHERE c.solicitud_id IN ({gph}) AND c.fecha_vencimiento >= '{W_START}' AND c.fecha_vencimiento < '{W_END}' AND c.estado='activo' AND p.deleted_at IS NULL AND p.fecha_pago >= %s GROUP BY p.pasarela_pago", gids + [START])
-        gpas = {}
-        for r in cur.fetchall():
-            p = r[1]
-            if 'MONNET' in r[0]: gpas['monnet'] = gpas.get('monnet', 0) + p
-            elif 'QR' in r[0]: gpas['bbva_qr'] = gpas.get('bbva_qr', 0) + p
-            elif 'MERCADO' in r[0]: gpas['mp'] = gpas.get('mp', 0) + p
-            else: gpas['otros'] = gpas.get('otros', 0) + p
-        cur.execute(f"SELECT COUNT(DISTINCT q.solicitud_id) FROM bbva_qr_payments q WHERE q.solicitud_id IN ({gph}) AND q.created_at >= %s AND q.status='paid'", gids + [START])
-        gqr_paid = cur.fetchone()[0]
-        cur.execute(f"SELECT COUNT(DISTINCT q.solicitud_id) FROM bbva_qr_payments q WHERE q.solicitud_id IN ({gph}) AND q.created_at >= %s", gids + [START])
-        gqr_gen = cur.fetchone()[0]
-        gpaid = sum(gpas.values())
-        d['grupos'][gname] = {'total': total, 'pre_qr': gpre, 'base': total - gpre, 'pagaron': gpaid, 'qr_paid': gqr_paid, 'qr_gen': gqr_gen, 'pasarelas': gpas}
-
-    # --- QR status ---
-    cur.execute(f"SELECT q.status, COUNT(*) FROM bbva_qr_payments q WHERE q.solicitud_id IN ({ph}) AND q.created_at >= %s GROUP BY q.status", ALL_IDS + [START])
-    d['qr_status'] = {r[0]: r[1] for r in cur.fetchall()}
-    cur.execute(f"SELECT COUNT(*) FROM bbva_qr_payments q WHERE q.solicitud_id IN ({ph}) AND q.created_at >= %s", ALL_IDS + [START])
-    d['qr_total'] = cur.fetchone()[0]
-    cur.execute(f"SELECT COUNT(DISTINCT q.solicitud_id) FROM bbva_qr_payments q WHERE q.solicitud_id IN ({ph}) AND q.created_at >= %s", ALL_IDS + [START])
-    d['qr_clientes'] = cur.fetchone()[0]
-
-    # QR por cliente
-    cur.execute(f"SELECT cnt, COUNT(*) FROM (SELECT q.solicitud_id, COUNT(*) AS cnt FROM bbva_qr_payments q WHERE q.solicitud_id IN ({ph}) AND q.created_at >= %s GROUP BY q.solicitud_id) t GROUP BY cnt ORDER BY cnt", ALL_IDS + [START])
-    d['qr_por_cliente'] = [(r[0], r[1]) for r in cur.fetchall()]
-
     # --- Banco Monnet ---
-    cur.execute(f"""SELECT b.nombre, COUNT(*) FROM monnet_pago_request m
+    cur.execute("""SELECT b.nombre, COUNT(*) FROM monnet_pago_request m
         JOIN evento_zonaclientes e ON e.id=m.evento_id JOIN banco b ON b.id=e.banco_id
-        WHERE m.solicitud_id IN ({ph}) AND m.status IN ('5','9') AND m.created_at >= %s
-        GROUP BY b.nombre ORDER BY 2 DESC""", ALL_IDS + [START])
+        WHERE m.status IN ('5','9') AND m.created_at >= %s AND m.created_at < %s
+        GROUP BY b.nombre ORDER BY 2 DESC""", (w_start, w_end))
     d['bancos_monnet'] = [(r[0], r[1]) for r in cur.fetchall()]
 
-    cur.execute(f"""SELECT CASE WHEN cr.monto<=50 THEN '0-50' WHEN cr.monto<=150 THEN '51-150' WHEN cr.monto<=250 THEN '151-250' ELSE '251+' END AS rango,
+    cur.execute("""SELECT CASE WHEN cr.monto<=50 THEN '0-50' WHEN cr.monto<=150 THEN '51-150'
+        WHEN cr.monto<=250 THEN '151-250' ELSE '251+' END AS rango,
         b.nombre, COUNT(*) FROM monnet_pago_request m
         JOIN evento_zonaclientes e ON e.id=m.evento_id JOIN banco b ON b.id=e.banco_id
-        JOIN cronograma cr ON cr.solicitud_id=m.solicitud_id AND cr.estado='activo' AND cr.fecha_vencimiento >= '{W_START}' AND cr.fecha_vencimiento < '{W_END}'
-        WHERE m.solicitud_id IN ({ph}) AND m.status IN ('5','9') AND m.created_at >= %s
-        GROUP BY rango, b.nombre ORDER BY rango, 3 DESC""", ALL_IDS + [START])
+        JOIN cronograma cr ON cr.solicitud_id=m.solicitud_id AND cr.estado='activo'
+        AND cr.fecha_vencimiento >= %s AND cr.fecha_vencimiento < %s
+        WHERE m.status IN ('5','9') AND m.created_at >= %s AND m.created_at < %s
+        GROUP BY rango, b.nombre ORDER BY rango, 3 DESC""",
+        (w_start, w_end, w_start, w_end))
     d['bancos_monnet_rango'] = [(r[0], r[1], r[2]) for r in cur.fetchall()]
 
     # MP metodo
-    cur.execute(f"""SELECT CASE JSON_UNQUOTE(JSON_EXTRACT(p.mercado_pago_payment_json, '$.issuer_id'))
+    cur.execute("""SELECT CASE JSON_UNQUOTE(JSON_EXTRACT(p.mercado_pago_payment_json, '$.issuer_id'))
         WHEN '12512' THEN 'BCP' WHEN '12446' THEN 'Interbank' WHEN '12354' THEN 'BBVA' WHEN '12551' THEN 'Scotiabank'
         ELSE CONCAT('Otro (', COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p.mercado_pago_payment_json, '$.payment_method_id')),'?'), ')')
         END AS banco, COUNT(*) FROM pago p JOIN cronograma c ON c.id=p.cronograma_id
-        WHERE c.solicitud_id IN ({ph}) AND c.fecha_vencimiento >= '{W_START}' AND c.fecha_vencimiento < '{W_END}'
-        AND c.estado='activo' AND p.deleted_at IS NULL AND p.mercado_pago_payment_json IS NOT NULL AND p.fecha_pago >= %s
-        GROUP BY banco ORDER BY 2 DESC""", ALL_IDS + [START])
+        WHERE c.estado='activo' AND c.fecha_vencimiento >= %s AND c.fecha_vencimiento < %s
+        AND p.deleted_at IS NULL AND p.mercado_pago_payment_json IS NOT NULL
+        GROUP BY banco ORDER BY 2 DESC""", (w_start, w_end))
     d['mp_metodo'] = [(r[0], r[1]) for r in cur.fetchall()]
 
-    # --- Trazabilidad ---
-    cur.execute(f"""SELECT q.solicitud_id, q.created_at, q.status, q.amount,
-        p.pasarela_pago, p.fecha_pago, p.monto_pago_total, TIMESTAMPDIFF(SECOND, q.created_at, p.fecha_pago) AS seg
-        FROM bbva_qr_payments q LEFT JOIN cronograma c ON c.solicitud_id=q.solicitud_id AND c.estado='activo'
-        AND c.fecha_vencimiento >= '{W_START}' AND c.fecha_vencimiento < '{W_END}'
-        LEFT JOIN pago p ON p.cronograma_id=c.id AND p.deleted_at IS NULL AND p.fecha_pago >= %s
-        WHERE q.solicitud_id IN ({ph}) AND q.created_at >= %s AND q.status IN ('pending','cancelled')
-        ORDER BY seg ASC""", [START] + ALL_IDS + [START])
+    # --- Trazabilidad: QR generados que no fueron pagados con QR ---
+    cur.execute("""SELECT q.solicitud_id, q.created_at, q.status, q.amount,
+        p.pasarela_pago, p.fecha_pago, p.monto_pago_total,
+        TIMESTAMPDIFF(SECOND, q.created_at, p.fecha_pago) AS seg
+        FROM bbva_qr_payments q
+        LEFT JOIN cronograma c ON c.solicitud_id=q.solicitud_id AND c.estado='activo'
+            AND c.fecha_vencimiento >= %s AND c.fecha_vencimiento < %s
+        LEFT JOIN pago p ON p.cronograma_id=c.id AND p.deleted_at IS NULL
+        WHERE q.created_at >= %s AND q.created_at < %s
+        AND q.status IN ('pending','cancelled')
+        ORDER BY seg ASC""", (w_start, w_end, w_start, w_end))
     seen = set()
     migrated = []
     no_pago = 0
     for r in cur.fetchall():
         sid = int(r[0])
-        if sid in seen: continue
+        if sid in seen:
+            continue
         seen.add(sid)
         if r[4]:
-            migrated.append({'sol': sid, 'seg': r[7], 'pas': r[4], 'qr_at': str(r[1]), 'p_at': str(r[5]), 'qm': float(r[3]), 'pm': float(r[6])})
+            migrated.append({'sol': sid, 'seg': r[7], 'pas': r[4],
+                             'qr_at': str(r[1]), 'p_at': str(r[5]),
+                             'qm': float(r[3]), 'pm': float(r[6])})
         else:
             no_pago += 1
 
     bk = {'<1min': 0, '1-10min': 0, '10min-1h': 0, '>1h': 0}
     for m in migrated:
         s = m['seg']
-        if s is None: continue
+        if s is None:
+            continue
         if s < 60: bk['<1min'] += 1
         elif s < 600: bk['1-10min'] += 1
         elif s < 3600: bk['10min-1h'] += 1
         else: bk['>1h'] += 1
+
     d['migraron'] = len(migrated)
     d['sin_pago'] = no_pago
     d['tiempos_migracion'] = bk
-    d['top_rapidas'] = sorted([m for m in migrated if m['seg'] and m['seg'] > 0], key=lambda x: x['seg'])[:10]
+    d['top_rapidas'] = sorted([m for m in migrated if m['seg'] and m['seg'] > 0],
+                               key=lambda x: x['seg'])[:10]
 
-    # Migraciones por pasarela
     migr_pas = {}
     for m in migrated:
         p = m['pas']
         migr_pas[p] = migr_pas.get(p, 0) + 1
     d['migr_pasarela'] = migr_pas
 
+    # --- Evolucion mensual (ultimos 3 meses con datos QR) ---
+    cur.execute("""SELECT DATE_FORMAT(q.created_at, '%%Y-%%m') AS mes,
+        COUNT(DISTINCT CASE WHEN q.status='paid' THEN q.solicitud_id END),
+        COUNT(DISTINCT q.solicitud_id), COUNT(*)
+        FROM bbva_qr_payments q WHERE q.created_at >= '2026-05-01'
+        GROUP BY mes ORDER BY mes""")
+    qr_hist = {r[0]: {'paid': r[1], 'gen': r[2], 'qrs': r[3]} for r in cur.fetchall()}
+
+    cur.execute("""SELECT DATE_FORMAT(c.fecha_vencimiento, '%%Y-%%m') AS mes,
+        COUNT(DISTINCT c.solicitud_id), ROUND(SUM(c.monto),2)
+        FROM cronograma c WHERE c.estado='activo' AND c.fecha_vencimiento >= '2026-05-01'
+        AND c.fecha_vencimiento < %s
+        GROUP BY mes ORDER BY mes""", (w_end,))
+    cuota_hist = {r[0]: {'solic': r[1], 'monto': float(r[2])} for r in cur.fetchall()}
+
+    cur.execute("""SELECT DATE_FORMAT(c.fecha_vencimiento, '%%Y-%%m') AS mes,
+        p.pasarela_pago, COUNT(DISTINCT c.solicitud_id)
+        FROM pago p JOIN cronograma c ON c.id=p.cronograma_id
+        WHERE c.estado='activo' AND c.fecha_vencimiento >= '2026-05-01'
+        AND c.fecha_vencimiento < %s AND p.deleted_at IS NULL
+        GROUP BY mes, p.pasarela_pago ORDER BY mes""", (w_end,))
+    pago_hist = {}
+    for r in cur.fetchall():
+        mes = r[0]
+        if mes not in pago_hist:
+            pago_hist[mes] = {'total': 0, 'bbva_qr': 0, 'monnet': 0, 'mp': 0, 'otros': 0}
+        cnt = r[2]
+        pago_hist[mes]['total'] += cnt
+        pas = r[1]
+        if 'QR' in pas: pago_hist[mes]['bbva_qr'] += cnt
+        elif 'MONNET' in pas: pago_hist[mes]['monnet'] += cnt
+        elif 'MERCADO' in pas: pago_hist[mes]['mp'] += cnt
+        else: pago_hist[mes]['otros'] += cnt
+
+    d['hist'] = {'qr': qr_hist, 'cuotas': cuota_hist, 'pagos': pago_hist}
+
     conn.close()
     return d
+
+
+def _classify_pasarela(pas):
+    if 'QR' in pas: return 'bbva_qr'
+    if 'MONNET' in pas: return 'monnet'
+    if 'MERCADO' in pas: return 'mp'
+    if 'RECAUDO' in pas or 'BK' in pas: return 'recaudo'
+    return 'otros'
+
+
+def _rango(m):
+    if m <= 50: return '0-50'
+    elif m <= 150: return '51-150'
+    elif m <= 250: return '151-250'
+    return '251+'
+
 
 # --- HTML helpers ---
 def pct(n, total, decimals=1):
@@ -224,50 +309,35 @@ def fmt(n):
     if isinstance(n, float): return f"{n:,.2f}"
     return f"{n:,}"
 
-def td(v, cls='', style=''):
-    s = f' class="{cls}"' if cls else ''
-    st = f' style="{style}"' if style else ''
-    return f'<td{s}{st}>{v}</td>'
-
 def tdc(v, bold=False, color=''):
     cls = 'text-center'
     if bold: cls += ' bold'
-    style = f'color:{color};' if color else ''
-    return td(v, cls, style)
+    style = f' style="color:{color};"' if color else ''
+    return f'<td class="{cls}"{style}>{v}</td>'
+
 
 # --- HTML generation ---
 def render(d):
-    today = datetime.now().strftime('%d/%m/%Y')
-    today_short = datetime.now().strftime('%d/%m/%Y')
-
-    # Compute aggregates
-    total_qr_paid = sum(v['qr_paid'] for v in d['por_monto'].values())
-    total_qr_gen = sum(v['qr_gen'] for v in d['por_monto'].values())
+    now = datetime.now()
+    hoy_str = now.strftime('%Y-%m-%d')
     total_pagos = d['total_pagos']
-    base = d['base_efectiva']
-
-    # Pasarela totals
-    pas_monnet = sum(v['monnet'] for v in d['por_monto'].values())
-    pas_qr = sum(v['bbva_qr'] for v in d['por_monto'].values())
-    pas_mp = sum(v['mp'] for v in d['por_monto'].values())
-    pas_rec = sum(v['recaudo'] for v in d['por_monto'].values())
-
-    # QR interaction stats
-    total_qr_interacted = total_qr_paid + d['migraron']
-    migr_total = d['migraron']
-
-    # Direct (no QR)
-    direct_monnet = pas_monnet - d['migr_pasarela'].get('MONNET', 0)
-    direct_mp = pas_mp - d['migr_pasarela'].get('MERCADO PAGO', 0)
-    direct_rec = pas_rec - d['migr_pasarela'].get('BBVA RECAUDO', 0) - d['migr_pasarela'].get('BBVA BK', 0)
+    base = d['total_solicitudes']
+    qr_paid = d['qr_paid']
+    qr_gen = d['qr_gen']
+    pc = d['pas_count']
+    pas_qr = pc.get('bbva_qr', 0)
+    pas_monnet = pc.get('monnet', 0)
+    pas_mp = pc.get('mp', 0)
+    pas_rec = pc.get('recaudo', 0)
+    pas_otros = pc.get('otros', 0)
 
     # Bar widths
-    pct_qr = round(total_qr_paid / total_pagos * 100, 1) if total_pagos else 0
-    pct_migr = round(migr_total / total_pagos * 100, 1) if total_pagos else 0
-    pct_monnet = round(direct_monnet / total_pagos * 100, 1) if total_pagos else 0
-    pct_otros = round(100 - pct_qr - pct_migr - pct_monnet, 1)
+    pct_qr = round(pas_qr / total_pagos * 100, 1) if total_pagos else 0
+    pct_monnet = round(pas_monnet / total_pagos * 100, 1) if total_pagos else 0
+    pct_mp = round(pas_mp / total_pagos * 100, 1) if total_pagos else 0
+    pct_otros_bar = round(100 - pct_qr - pct_monnet - pct_mp, 1)
 
-    # Daily table
+    # --- Daily table ---
     daily_html = ''
     acum = 0
     for dia in sorted(d['diario'].keys()):
@@ -275,56 +345,17 @@ def render(d):
         total_dia = dd['monnet'] + dd['bbva_qr'] + dd['mp'] + dd['otros']
         acum += total_dia
         pct_qr_dia = pct(dd['bbva_qr'], total_dia)
-        dia_fmt = dia[5:]  # MM-DD
-        nota = '*' if dia == '2026-06-10' else ''
-        bg = ' style="background:#fff8e1;"' if dia == datetime.now().strftime('%Y-%m-%d') else ''
+        dia_fmt = dia[5:].replace('-', '/')
+        bg = ' style="background:#fff8e1;"' if dia == hoy_str else ''
         daily_html += f'''<tr{bg}>
-            <td class="bold">{dia_fmt.replace('-','/')}{nota}</td>
-            <td class="text-center">{dd['monnet']}</td>
-            <td class="text-center bold" style="color:#28a745;">{dd['bbva_qr']}</td>
-            <td class="text-center">{dd['mp']}</td>
-            <td class="text-center">{dd['otros']}</td>
+            <td class="bold">{dia_fmt}</td>
+            {tdc(dd['bbva_qr'], True, '#28a745')}{tdc(dd['monnet'])}{tdc(dd['mp'])}{tdc(dd['otros'])}
             <td class="text-center bold">{total_dia}</td>
             <td class="text-center bold" style="color:#28a745;">{pct_qr_dia}</td>
-            <td class="text-center">{acum}</td>
+            {tdc(acum)}
         </tr>'''
 
-    # Group table
-    grp_order = ['Control', 'A', 'B', 'C']
-    grp_colors = {'Control': '#495057', 'A': '#1565c0', 'B': '#c62828', 'C': '#7b1fa2'}
-    grp_names = {'Control': 'Control', 'A': 'Grupo A', 'B': 'Grupo B', 'C': 'Grupo C'}
-    grp_html = ''
-    grp_pas_html = ''
-    tot_base = tot_pag = tot_qrp = tot_qrg = 0
-    for g in grp_order:
-        gd = d['grupos'][g]
-        color = grp_colors[g]
-        pag = gd['pagaron']
-        b = gd['base']
-        qrp = gd['qr_paid']
-        qrg = gd['qr_gen']
-        tot_base += b; tot_pag += pag; tot_qrp += qrp; tot_qrg += qrg
-        grp_html += f'''<tr>
-            <td class="bold" style="color:{color};">{grp_names[g]}</td>
-            {tdc(b)}{tdc(pag, True)}{tdc(pct(pag, b))}
-            {tdc(qrp, True, '#28a745')}{tdc(pct(qrp, pag), True, '#28a745')}
-            {tdc(qrg)}{tdc(pct(qrp, qrg), True)}
-        </tr>'''
-        # Pasarela row
-        mn = gd['pasarelas'].get('monnet', 0)
-        qr = gd['pasarelas'].get('bbva_qr', 0)
-        mp = gd['pasarelas'].get('mp', 0)
-        ot = gd['pasarelas'].get('otros', 0)
-        grp_pas_html += f'''<tr>
-            <td class="bold" style="color:{color};">{grp_names[g]}</td>
-            <td class="text-center">{mn} ({pct(mn, pag)})</td>
-            <td class="text-center bold" style="color:#28a745;">{qr} ({pct(qr, pag)})</td>
-            <td class="text-center">{mp} ({pct(mp, pag)})</td>
-            <td class="text-center">{ot} ({pct(ot, pag)})</td>
-            <td class="text-center bold">{pag}</td>
-        </tr>'''
-
-    # Monto range table
+    # --- Monto range tables ---
     rng_html = ''
     rng_pas_html = ''
     for r in d['ranges_order']:
@@ -338,15 +369,15 @@ def render(d):
         rt = rd['pagaron']
         rng_pas_html += f'''<tr>
             <td class="bold">S/ {r}</td>
-            <td class="text-center">{rd['monnet']} ({pct(rd['monnet'], rt)})</td>
-            <td class="text-center bold" style="color:#28a745;">{rd['bbva_qr']} ({pct(rd['bbva_qr'], rt)})</td>
-            <td class="text-center">{rd['mp']} ({pct(rd['mp'], rt)})</td>
-            <td class="text-center">{rd['recaudo']} ({pct(rd['recaudo'], rt)})</td>
-            <td class="text-center bold">{rt}</td>
+            {tdc(f"{rd['bbva_qr']} ({pct(rd['bbva_qr'], rt)})", True, '#28a745')}
+            {tdc(f"{rd['monnet']} ({pct(rd['monnet'], rt)})")}
+            {tdc(f"{rd['mp']} ({pct(rd['mp'], rt)})")}
+            {tdc(f"{rd['recaudo']} ({pct(rd['recaudo'], rt)})")}
+            {tdc(rt, True)}
         </tr>'''
 
-    # Banco Monnet table
-    monnet_total = sum(b[1] for b in d['bancos_monnet'])
+    # --- Banco Monnet table ---
+    monnet_total = sum(b[1] for b in d['bancos_monnet']) if d['bancos_monnet'] else 0
     banco_html = ''
     banco_colors = {'Yape': '#6f21a8', 'BCP': '#004481', 'Interbank': '#28a745', 'BBVA': '#0066b3'}
     for b_name, b_cnt in d['bancos_monnet']:
@@ -359,7 +390,6 @@ def render(d):
             <td><div style="width:{p}%; height:18px; background:{clr}; border-radius:4px; min-width:8px;"></div></td>
         </tr>'''
 
-    # Banco Monnet por rango
     banco_rng = {}
     for rng, bname, cnt in d['bancos_monnet_rango']:
         if rng not in banco_rng: banco_rng[rng] = {}
@@ -368,16 +398,19 @@ def render(d):
     banco_names = [b[0] for b in d['bancos_monnet'][:4]] if d['bancos_monnet'] else ['Yape', 'BCP', 'Interbank', 'BBVA']
     for r in d['ranges_order']:
         cells = ''
+        vals = banco_rng.get(r, {})
+        max_v = max(vals.values(), default=0)
         for bn in banco_names:
-            v = banco_rng.get(r, {}).get(bn, 0)
-            bold = ' bold' if v == max(banco_rng.get(r, {}).values(), default=0) and v > 0 else ''
+            v = vals.get(bn, 0)
+            bold = ' bold' if v == max_v and v > 0 else ''
             cells += f'<td class="text-center{bold}">{v if v else "-"}</td>'
         banco_rng_html += f'<tr><td class="bold">S/ {r}</td>{cells}</tr>'
 
-    # MP metodo table
-    mp_total = sum(m[1] for m in d['mp_metodo'])
+    # --- MP metodo ---
+    mp_total = sum(m[1] for m in d['mp_metodo']) if d['mp_metodo'] else 0
     mp_html = ''
-    mp_name_map = {'Otro (pagoefectivo_atm)': 'PagoEfectivo (ATM/agente)', 'Otro (yape)': 'Yape', 'Otro (debvisa)': 'Debito Visa', 'Otro (debmaster)': 'Debito Mastercard'}
+    mp_name_map = {'Otro (pagoefectivo_atm)': 'PagoEfectivo', 'Otro (yape)': 'Yape',
+                   'Otro (debvisa)': 'Debito Visa', 'Otro (debmaster)': 'Debito Mastercard'}
     for m_name, m_cnt in d['mp_metodo']:
         display = mp_name_map.get(m_name, m_name)
         p = round(m_cnt / mp_total * 100, 1) if mp_total else 0
@@ -387,11 +420,12 @@ def render(d):
             <td class="text-center">{p}%</td>
         </tr>'''
 
-    # QR status table
+    # --- QR status ---
     qs = d['qr_status']
     qr_t = d['qr_total']
     qr_status_html = ''
-    for s, badge in [('paid', 'status-paid'), ('pending', 'status-pending'), ('cancelled', 'status-cancelled'), ('expired', 'status-expired')]:
+    for s, badge in [('paid', 'status-paid'), ('pending', 'status-pending'),
+                     ('cancelled', 'status-cancelled'), ('expired', 'status-expired')]:
         v = qs.get(s, 0)
         if v == 0 and s == 'expired': continue
         qr_status_html += f'''<tr>
@@ -400,7 +434,6 @@ def render(d):
             <td class="text-center">{pct(v, qr_t)}</td>
         </tr>'''
 
-    # QR por cliente
     qr_cli_html = ''
     for cnt, clients in d['qr_por_cliente']:
         qr_cli_html += f'''<tr>
@@ -409,10 +442,11 @@ def render(d):
             <td class="text-center">{pct(clients, d['qr_clientes'])}</td>
         </tr>'''
 
-    # Trazabilidad tiempos
+    # --- Trazabilidad ---
     traz_html = ''
     tbk = d['tiempos_migracion']
-    for label, key in [('Menos de 1 minuto', '<1min'), ('1 a 10 minutos', '1-10min'), ('10 min a 1 hora', '10min-1h'), ('Mas de 1 hora', '>1h')]:
+    for label, key in [('Menos de 1 minuto', '<1min'), ('1 a 10 minutos', '1-10min'),
+                       ('10 min a 1 hora', '10min-1h'), ('Mas de 1 hora', '>1h')]:
         v = tbk[key]
         traz_html += f'''<tr>
             <td>{label}</td>
@@ -420,12 +454,10 @@ def render(d):
             <td class="text-center">{pct(v, d['migraron'])}</td>
         </tr>'''
 
-    # Top rapidas
     top_html = ''
     for m in d['top_rapidas']:
         seg = m['seg']
-        if seg < 60: t_fmt = f"{seg} seg"
-        else: t_fmt = f"{seg/60:.1f} min"
+        t_fmt = f"{seg} seg" if seg < 60 else f"{seg/60:.1f} min"
         qr_dt = m['qr_at'][5:16].replace('-', '/')
         p_dt = m['p_at'][5:16].replace('-', '/')
         top_html += f'''<tr>
@@ -437,35 +469,35 @@ def render(d):
             <td>{m['pas']}</td>
         </tr>'''
 
-    # Timeline status
-    def ts(fecha_str):
-        """Return status badge based on today vs date."""
-        hoy = date.today()
-        if isinstance(fecha_str, str):
-            parts = fecha_str.split('/')
-            if len(parts) == 2:
-                d_m, d_d = int(parts[0]), 6  # hack for month
-        return ''
+    migr_desc = ', '.join(f"{p} ({c})" for p, c in
+                          sorted(d['migr_pasarela'].items(), key=lambda x: -x[1]))
 
-    hoy = date.today()
-    def badge_for(month, day):
-        d_date = date(2026, month, day)
-        if d_date < hoy: return 'status-expired', 'Vencido', ''
-        elif d_date == hoy: return 'status-pending', 'Hoy', ' style="background:#fff8e1;"'
-        return 'status-active', 'Pendiente', ''
-
-    b10 = badge_for(6, 10)
-    b11 = badge_for(6, 11)
-    b14 = badge_for(6, 14)
-    b15 = badge_for(6, 15)
-    b17 = badge_for(6, 17)
-    b18 = badge_for(6, 18)
-
-    # Migr pasarela description
-    migr_desc_parts = []
-    for p, c in sorted(d['migr_pasarela'].items(), key=lambda x: -x[1]):
-        migr_desc_parts.append(f"{p} ({c})")
-    migr_desc = ', '.join(migr_desc_parts)
+    # --- Evolucion mensual ---
+    hist_html = ''
+    hist = d['hist']
+    hist_meses = sorted(set(list(hist['cuotas'].keys()) + list(hist['pagos'].keys())))
+    for mes in hist_meses:
+        y, m = mes.split('-')
+        mes_label = f"{MESES_ES.get(int(m), m)} {y}"
+        ch = hist['cuotas'].get(mes, {})
+        ph_ = hist['pagos'].get(mes, {})
+        qh = hist['qr'].get(mes, {})
+        solic = ch.get('solic', 0)
+        total_pag = ph_.get('total', 0)
+        qr_p = ph_.get('bbva_qr', 0)
+        qr_gen_h = qh.get('gen', 0)
+        qr_paid_h = qh.get('paid', 0)
+        conv = pct(qr_paid_h, qr_gen_h) if qr_gen_h else '-'
+        pct_qr_h = pct(qr_p, total_pag) if total_pag else '-'
+        pct_cob = pct(total_pag, solic) if solic else '-'
+        is_current = mes == f"{now.year}-{now.month:02d}"
+        bg = ' style="background:#fff8e1;"' if is_current else ''
+        hist_html += f'''<tr{bg}>
+            <td class="bold">{mes_label}{'*' if is_current else ''}</td>
+            {tdc(fmt(solic))}{tdc(fmt(total_pag))}{tdc(pct_cob, True)}
+            {tdc(fmt(qr_p), True, '#28a745')}{tdc(pct_qr_h, True, '#28a745')}
+            {tdc(fmt(qr_gen_h))}{tdc(conv, True)}
+        </tr>'''
 
     # --- FULL HTML ---
     html = f'''<!DOCTYPE html>
@@ -473,7 +505,7 @@ def render(d):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reporte QR BBVA - Live</title>
+    <title>Dashboard QR BBVA - {d['mes']} {d['anio']}</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #f0f2f5; color: #1a1a2e; padding: 40px 20px; }}
@@ -485,22 +517,18 @@ def render(d):
         .live-badge {{ background: #e8590c; color: white; font-size: 11px; padding: 3px 10px; border-radius: 10px; font-weight: 700; letter-spacing: 0.5px; display: inline-flex; align-items: center; gap: 6px; }}
         .live-dot {{ width: 8px; height: 8px; background: white; border-radius: 50%; animation: pulse 1.5s infinite; }}
         @keyframes pulse {{ 0%,100% {{ opacity: 1; }} 50% {{ opacity: 0.3; }} }}
-        .phase-banner {{ background: linear-gradient(135deg, #1b5e20, #2e7d32); color: white; padding: 20px 32px; border-radius: 12px; margin-bottom: 30px; display: flex; align-items: center; gap: 20px; box-shadow: 0 2px 12px rgba(27,94,32,0.2); }}
-        .phase-banner .phase-icon {{ width: 56px; height: 56px; background: rgba(255,255,255,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 700; flex-shrink: 0; }}
-        .phase-banner .phase-text h3 {{ font-size: 18px; font-weight: 700; margin-bottom: 4px; }}
-        .phase-banner .phase-text p {{ font-size: 13px; opacity: 0.85; }}
         .kpi-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px; }}
         .kpi-card {{ background: white; border-radius: 12px; padding: 28px 24px; text-align: center; box-shadow: 0 2px 12px rgba(0,0,0,0.06); position: relative; overflow: hidden; }}
         .kpi-card::before {{ content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; }}
         .kpi-card:nth-child(1)::before {{ background: #004481; }}
-        .kpi-card:nth-child(2)::before {{ background: #0066b3; }}
-        .kpi-card:nth-child(3)::before {{ background: #28a745; }}
+        .kpi-card:nth-child(2)::before {{ background: #28a745; }}
+        .kpi-card:nth-child(3)::before {{ background: #0066b3; }}
         .kpi-card:nth-child(4)::before {{ background: #e8590c; }}
         .kpi-label {{ font-size: 13px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }}
         .kpi-value {{ font-size: 36px; font-weight: 700; }}
         .kpi-card:nth-child(1) .kpi-value {{ color: #004481; }}
-        .kpi-card:nth-child(2) .kpi-value {{ color: #0066b3; }}
-        .kpi-card:nth-child(3) .kpi-value {{ color: #28a745; }}
+        .kpi-card:nth-child(2) .kpi-value {{ color: #28a745; }}
+        .kpi-card:nth-child(3) .kpi-value {{ color: #0066b3; }}
         .kpi-card:nth-child(4) .kpi-value {{ color: #e8590c; }}
         .kpi-sub {{ font-size: 13px; color: #888; margin-top: 6px; }}
         .section {{ background: white; border-radius: 12px; padding: 32px; margin-bottom: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }}
@@ -514,8 +542,6 @@ def render(d):
         .text-right {{ text-align: right; }}
         .text-center {{ text-align: center; }}
         .bold {{ font-weight: 600; }}
-        .bar-container {{ display: flex; align-items: center; gap: 12px; }}
-        .bar-bg {{ flex: 1; height: 28px; background: #f0f2f5; border-radius: 6px; overflow: hidden; position: relative; }}
         .detail-table {{ margin-top: 16px; }}
         .detail-table th {{ font-size: 11px; }}
         .detail-table td {{ font-size: 13px; padding: 10px 16px; }}
@@ -524,229 +550,122 @@ def render(d):
         .status-expired {{ background: #fde2e2; color: #9b1c1c; }}
         .status-pending {{ background: #fff3cd; color: #856404; }}
         .status-cancelled {{ background: #f8d7da; color: #721c24; }}
-        .status-active {{ background: #cce5ff; color: #004085; }}
         .note {{ background: #fff8e1; border-left: 4px solid #ffc107; padding: 16px 20px; border-radius: 0 8px 8px 0; font-size: 13px; color: #665200; margin-top: 20px; line-height: 1.6; }}
-        .group-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }}
-        .group-card {{ border-radius: 10px; padding: 20px; text-align: center; }}
-        .group-card.control {{ background: #f8f9fa; border: 2px solid #dee2e6; }}
-        .group-card.group-a {{ background: #e3f2fd; border: 2px solid #90caf9; }}
-        .group-card.group-b {{ background: #fce4ec; border: 2px solid #f48fb1; }}
-        .group-card.group-c {{ background: #f3e5f5; border: 2px solid #ce93d8; }}
-        .group-card .group-name {{ font-size: 14px; font-weight: 700; margin-bottom: 4px; }}
-        .group-card .group-n {{ font-size: 32px; font-weight: 700; margin-bottom: 4px; }}
-        .group-card .group-detail {{ font-size: 12px; color: #666; }}
-        .group-card.control .group-name,.group-card.control .group-n {{ color: #495057; }}
-        .group-card.group-a .group-name,.group-card.group-a .group-n {{ color: #1565c0; }}
-        .group-card.group-b .group-name,.group-card.group-b .group-n {{ color: #c62828; }}
-        .group-card.group-c .group-name,.group-card.group-c .group-n {{ color: #7b1fa2; }}
         .footer {{ text-align: center; padding: 24px; font-size: 12px; color: #aaa; }}
         .divider {{ border: none; border-top: 3px solid #004481; margin: 40px 0 30px 0; opacity: 0.15; }}
         .section-title {{ text-align: center; font-size: 22px; font-weight: 700; color: #004481; margin-bottom: 8px; }}
         .section-subtitle {{ text-align: center; font-size: 14px; color: #888; margin-bottom: 30px; }}
-        @media (max-width: 768px) {{ .kpi-grid, .group-grid {{ grid-template-columns: repeat(2, 1fr); }} .header .meta {{ flex-direction: column; gap: 4px; }} }}
+        @media (max-width: 768px) {{ .kpi-grid {{ grid-template-columns: repeat(2, 1fr); }} .header .meta {{ flex-direction: column; gap: 4px; }} }}
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>Reporte QR BBVA <span class="live-badge"><span class="live-dot"></span> LIVE</span></h1>
-            <p>Piloto de pagos con QR BBVA: resultados en tiempo real del experimento A/B/C</p>
+            <h1>Dashboard QR BBVA <span class="live-badge"><span class="live-dot"></span> LIVE</span></h1>
+            <p>Metricas de cobranza y adopcion de QR BBVA &mdash; {d['mes']} {d['anio']}</p>
             <div class="meta">
-                <span>Piloto mayo: 232 clientes | Cohorte junio: 2,550 clientes</span>
-                <span>Actualizado: {datetime.now().strftime('%d/%m/%Y %H:%M')}</span>
-            </div>
-        </div>
-
-        <div class="phase-banner">
-            <div class="phase-icon">2</div>
-            <div class="phase-text">
-                <h3>Fase 2: Experimento A/B/C en curso</h3>
-                <p>Lanzado el 10/06/2026 14:10 &mdash; 2,550 clientes con cuotas venciendo entre el 10 y 18 de junio</p>
+                <span>{fmt(base)} solicitudes con cuotas en {d['mes'].lower()}</span>
+                <span>Cuota promedio: S/ {fmt(d['cuota_promedio'])}</span>
+                <span>Actualizado: {now.strftime('%d/%m/%Y %H:%M')}</span>
             </div>
         </div>
 
         <!-- KPIs -->
         <div class="kpi-grid">
             <div class="kpi-card">
-                <div class="kpi-label">Pagos post-QR</div>
-                <div class="kpi-value">{fmt(total_pagos)}</div>
-                <div class="kpi-sub">de {fmt(base)} base ({pct(total_pagos, base)} cobranza)</div>
+                <div class="kpi-label">Cobranza</div>
+                <div class="kpi-value">{pct(total_pagos, base)}</div>
+                <div class="kpi-sub">{fmt(total_pagos)} de {fmt(base)} solicitudes</div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-label">Pagaron con QR</div>
-                <div class="kpi-value">{pct(total_qr_paid, total_pagos)}</div>
-                <div class="kpi-sub">{fmt(total_qr_paid)} de {fmt(total_pagos)} pagos</div>
+                <div class="kpi-value">{pct(pas_qr, total_pagos)}</div>
+                <div class="kpi-sub">{fmt(pas_qr)} de {fmt(total_pagos)} pagos</div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-label">Conversion QR</div>
-                <div class="kpi-value">{pct(total_qr_paid, total_qr_gen)}</div>
-                <div class="kpi-sub">{fmt(total_qr_paid)} pagaron de {fmt(total_qr_gen)} que generaron</div>
+                <div class="kpi-value">{pct(qr_paid, qr_gen)}</div>
+                <div class="kpi-sub">{fmt(qr_paid)} pagaron de {fmt(qr_gen)} que generaron</div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-label">Monto cobrado</div>
                 <div class="kpi-value">S/ {d['monto_cobrado']/1000:.0f}K</div>
-                <div class="kpi-sub">de S/ {d['monto_total']/1000:.0f}K total ({pct(d['monto_cobrado'], d['monto_total'])})</div>
+                <div class="kpi-sub">de S/ {d['monto_total']/1000:.0f}K ({pct(d['monto_cobrado'], d['monto_total'])})</div>
             </div>
         </div>
 
-        <!-- ===== DISENO DEL EXPERIMENTO (estatico) ===== -->
+        <!-- 1: Distribucion de pagos -->
         <div class="section">
-            <h2><span class="num">E1</span> Diseno del experimento</h2>
-            <p style="color:#666; font-size:14px; margin-bottom:24px;">2,550 clientes con cuotas venciendo entre el 10 y 18 de junio, asignados aleatoriamente a 4 grupos balanceados por fecha de vencimiento y monto.</p>
-            <div class="group-grid">
-                <div class="group-card control"><div class="group-name">Control</div><div class="group-n">638</div><div class="group-detail">S/ 106,885 total</div><div class="group-detail">Prom. S/ 167.53</div></div>
-                <div class="group-card group-a"><div class="group-name">Grupo A</div><div class="group-n">638</div><div class="group-detail">S/ 100,698 total</div><div class="group-detail">Prom. S/ 157.83</div></div>
-                <div class="group-card group-b"><div class="group-name">Grupo B</div><div class="group-n">637</div><div class="group-detail">S/ 111,383 total</div><div class="group-detail">Prom. S/ 174.86</div></div>
-                <div class="group-card group-c"><div class="group-name">Grupo C</div><div class="group-n">637</div><div class="group-detail">S/ 105,198 total</div><div class="group-detail">Prom. S/ 165.15</div></div>
-            </div>
-            <div class="note"><strong>Balance:</strong> Diferencia maxima entre promedios: S/ 17.03 (10.8%). Todos dentro de +/- 5.1% de la media global (S/ 166.34).</div>
-        </div>
-
-        <!-- Distribucion por fecha de vencimiento -->
-        <div class="section">
-            <h2><span class="num">E2</span> Distribucion por fecha de vencimiento</h2>
+            <h2><span class="num">1</span> Distribucion de pagos por pasarela</h2>
             <table style="margin-bottom:20px;">
-                <thead><tr><th>Fecha venc.</th><th class="text-center">Control</th><th class="text-center">A</th><th class="text-center">B</th><th class="text-center">C</th><th class="text-center">Total</th><th class="text-center">%</th></tr></thead>
+                <thead><tr><th>Pasarela</th><th class="text-center">Solicitudes</th><th class="text-center">% de pagos</th></tr></thead>
                 <tbody>
-                    <tr><td class="bold">10/06</td><td class="text-center">185</td><td class="text-center">185</td><td class="text-center">184</td><td class="text-center">184</td><td class="text-center bold">738</td><td class="text-center">28.9%</td></tr>
-                    <tr><td class="bold">11/06</td><td class="text-center">10</td><td class="text-center">10</td><td class="text-center">11</td><td class="text-center">11</td><td class="text-center bold">42</td><td class="text-center">1.6%</td></tr>
-                    <tr><td class="bold">12/06</td><td class="text-center">12</td><td class="text-center">12</td><td class="text-center">11</td><td class="text-center">11</td><td class="text-center bold">46</td><td class="text-center">1.8%</td></tr>
-                    <tr><td class="bold">13/06</td><td class="text-center">1</td><td class="text-center">1</td><td class="text-center">2</td><td class="text-center">2</td><td class="text-center bold">6</td><td class="text-center">0.2%</td></tr>
-                    <tr><td class="bold">14/06</td><td class="text-center">2</td><td class="text-center">2</td><td class="text-center">2</td><td class="text-center">1</td><td class="text-center bold">7</td><td class="text-center">0.3%</td></tr>
-                    <tr><td class="bold">15/06</td><td class="text-center">39</td><td class="text-center">38</td><td class="text-center">38</td><td class="text-center">39</td><td class="text-center bold">154</td><td class="text-center">6.0%</td></tr>
-                    <tr><td class="bold">16/06</td><td class="text-center">9</td><td class="text-center">10</td><td class="text-center">10</td><td class="text-center">9</td><td class="text-center bold">38</td><td class="text-center">1.5%</td></tr>
-                    <tr><td class="bold">17/06</td><td class="text-center">9</td><td class="text-center">9</td><td class="text-center">9</td><td class="text-center">9</td><td class="text-center bold">36</td><td class="text-center">1.4%</td></tr>
-                    <tr><td class="bold">18/06</td><td class="text-center">371</td><td class="text-center">371</td><td class="text-center">370</td><td class="text-center">371</td><td class="text-center bold">1,483</td><td class="text-center">58.2%</td></tr>
-                    <tr style="background:#f8f9fa;"><td class="bold">Total</td><td class="text-center bold">638</td><td class="text-center bold">638</td><td class="text-center bold">637</td><td class="text-center bold">637</td><td class="text-center bold">2,550</td><td class="text-center bold">100%</td></tr>
-                </tbody>
-            </table>
-            <p style="font-size:13px; color:#666; margin-bottom:8px;"><strong>Concentracion</strong></p>
-            <div style="display:flex; height:40px; border-radius:8px; overflow:hidden; margin-bottom:8px;">
-                <div style="width:28.9%; background:#004481; display:flex; align-items:center; justify-content:center; color:white; font-size:11px; font-weight:600;">10 jun: 738</div>
-                <div style="width:5.3%; background:#0066b3; font-size:9px; display:flex; align-items:center; justify-content:center; color:white;">11-14</div>
-                <div style="width:6.0%; background:#28a745; display:flex; align-items:center; justify-content:center; color:white; font-size:11px; font-weight:600;">15: 154</div>
-                <div style="width:2.9%; background:#6f42c1; font-size:9px; display:flex; align-items:center; justify-content:center; color:white;">16-17</div>
-                <div style="width:58.2%; background:#e8590c; display:flex; align-items:center; justify-content:center; color:white; font-size:11px; font-weight:600;">18 jun: 1,483</div>
-            </div>
-            <p style="font-size:12px; color:#888;">El 87.1% de los vencimientos se concentra en 10/06 (29%) y 18/06 (58%).</p>
-        </div>
-
-        <!-- Timeline dinamico -->
-        <div class="section">
-            <h2><span class="num">E3</span> Timeline y proximos hitos</h2>
-            <table>
-                <thead><tr><th>Fecha</th><th>Evento</th><th class="text-center">Clientes</th><th class="text-center">% acum</th><th>Status</th></tr></thead>
-                <tbody>
-                    <tr{b10[2]}><td class="bold">10/06</td><td>Lanzamiento + primer vencimiento</td><td class="text-center bold">738</td><td class="text-center">28.9%</td><td><span class="status-badge {b10[0]}">{b10[1]}</span></td></tr>
-                    <tr{b11[2]}><td class="bold">11/06</td><td>Segundo vencimiento</td><td class="text-center bold">42</td><td class="text-center">30.6%</td><td><span class="status-badge {b11[0]}">{b11[1]}</span></td></tr>
-                    <tr{b14[2]}><td class="bold">12-14/06</td><td>Vencimientos intermedios</td><td class="text-center">59</td><td class="text-center">32.9%</td><td><span class="status-badge {b14[0]}">{b14[1]}</span></td></tr>
-                    <tr{b15[2]}><td class="bold">15/06</td><td>Vencimiento medio (domingo)</td><td class="text-center bold">154</td><td class="text-center">38.9%</td><td><span class="status-badge {b15[0]}">{b15[1]}</span></td></tr>
-                    <tr{b17[2]}><td class="bold">16-17/06</td><td>Vencimientos previos al cierre</td><td class="text-center">74</td><td class="text-center">41.8%</td><td><span class="status-badge {b17[0]}">{b17[1]}</span></td></tr>
-                    <tr{b18[2]}><td class="bold">18/06</td><td>Vencimiento principal (58%)</td><td class="text-center bold">1,483</td><td class="text-center bold">100%</td><td><span class="status-badge {b18[0]}">{b18[1]}</span></td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <hr class="divider">
-        <p class="section-title">Resultados Fase 2 &mdash; Tiempo real</p>
-        <p class="section-subtitle">Desde lanzamiento (10/06 14:10) &mdash; Base: {fmt(base)} solicitudes &mdash; {fmt(total_pagos)} pagos</p>
-
-        <!-- Section 1: Distribucion de pagos -->
-        <div class="section">
-            <h2><span class="num">1</span> Distribucion de pagos (Fase 2)</h2>
-            <p style="color:#666; font-size:14px; margin-bottom:8px;">De las {fmt(d['total_cuotas'])} cuotas en ventana, <strong>{d['pre_qr']} pagaron antes</strong> del QR. Base efectiva: <strong>{fmt(base)}</strong>.</p>
-            <p style="color:#666; font-size:14px; margin-bottom:24px;"><strong>{fmt(total_pagos)} han pagado</strong> post-QR. S/ {fmt(d['monto_cobrado'])} cobrados de S/ {fmt(d['monto_total'])}.</p>
-
-            <table style="margin-bottom:20px;">
-                <thead><tr><th>Categoria</th><th class="text-center">Solicitudes</th><th class="text-center">% de {fmt(total_pagos)} pagos</th><th>Detalle</th></tr></thead>
-                <tbody>
-                    <tr><td class="bold" style="color:#28a745;">Pagaron con QR</td>{tdc(total_qr_paid, True, '#28a745')}{tdc(pct(total_qr_paid, total_pagos), True, '#28a745')}<td style="color:#666;">Generaron QR y completaron pago</td></tr>
-                    <tr><td class="bold" style="color:#e8590c;">QR &rarr; migraron a otro</td>{tdc(migr_total, True, '#e8590c')}{tdc(pct(migr_total, total_pagos), True, '#e8590c')}<td style="color:#666;">{migr_desc}</td></tr>
-                    <tr><td class="bold">Monnet directo</td>{tdc(direct_monnet, True)}{tdc(pct(direct_monnet, total_pagos))}<td style="color:#666;">Sin interaccion con QR</td></tr>
-                    <tr><td class="bold">MP + Recaudo directo</td>{tdc(direct_mp + direct_rec, True)}{tdc(pct(direct_mp + direct_rec, total_pagos))}<td style="color:#666;">Sin interaccion con QR</td></tr>
-                    <tr style="background:#f8f9fa;"><td class="bold">Total</td>{tdc(total_pagos, True)}{tdc('100%', True)}<td></td></tr>
+                    <tr><td class="bold" style="color:#28a745;">BBVA QR</td>{tdc(fmt(pas_qr), True, '#28a745')}{tdc(pct(pas_qr, total_pagos), True, '#28a745')}</tr>
+                    <tr><td class="bold">Monnet</td>{tdc(fmt(pas_monnet), True)}{tdc(pct(pas_monnet, total_pagos))}</tr>
+                    <tr><td class="bold">Mercado Pago</td>{tdc(fmt(pas_mp), True)}{tdc(pct(pas_mp, total_pagos))}</tr>
+                    <tr><td class="bold">Recaudo / BK</td>{tdc(fmt(pas_rec + pas_otros), True)}{tdc(pct(pas_rec + pas_otros, total_pagos))}</tr>
+                    <tr style="background:#f8f9fa;"><td class="bold">Total</td>{tdc(fmt(total_pagos), True)}{tdc('100%', True)}</tr>
                 </tbody>
             </table>
 
-            <div style="margin-bottom:12px;"><div class="bar-container"><div class="bar-bg" style="height:36px;"><div style="display:flex; height:100%;">
+            <div style="margin-bottom:12px;"><div style="height:36px; background:#f0f2f5; border-radius:6px; overflow:hidden; display:flex;">
                 <div style="width:{pct_qr}%; background:#28a745; display:flex; align-items:center; justify-content:center; color:white; font-size:11px; font-weight:600; border-radius:6px 0 0 6px;">QR {pct_qr}%</div>
-                <div style="width:{pct_migr}%; background:#ffc107; display:flex; align-items:center; justify-content:center; color:#665200; font-size:11px; font-weight:600;">Migr {pct_migr}%</div>
                 <div style="width:{pct_monnet}%; background:#004481; display:flex; align-items:center; justify-content:center; color:white; font-size:11px; font-weight:600;">Monnet {pct_monnet}%</div>
-                <div style="width:{max(pct_otros, 1)}%; background:#6f42c1; display:flex; align-items:center; justify-content:center; color:white; font-size:10px; font-weight:600; border-radius:0 6px 6px 0;">Otros {pct_otros}%</div>
-            </div></div></div></div>
+                <div style="width:{pct_mp}%; background:#6f42c1; display:flex; align-items:center; justify-content:center; color:white; font-size:11px; font-weight:600;">MP {pct_mp}%</div>
+                <div style="width:{max(pct_otros_bar, 1)}%; background:#adb5bd; display:flex; align-items:center; justify-content:center; color:white; font-size:10px; font-weight:600; border-radius:0 6px 6px 0;">Otros</div>
+            </div></div>
 
             <div class="note" style="background:#e8f5e9; border-left-color:#28a745; color:#1b5e20;">
-                <strong>Lectura clave:</strong> QR capturo el <strong>{pct(total_qr_paid, total_pagos)}</strong> de pagos. Sumando migraciones, el <strong>{pct(total_qr_interacted, total_pagos)}</strong> ({total_qr_interacted} de {total_pagos}) provinieron de clientes que interactuaron con el QR.
+                <strong>QR BBVA es el canal principal</strong> con el <strong>{pct(pas_qr, total_pagos)}</strong> de los pagos.
+                Sumando clientes que generaron QR y luego migraron ({d['migraron']}), el QR influyo en <strong>{pct(pas_qr + d['migraron'], total_pagos)}</strong> de las cobranzas.
             </div>
         </div>
 
-        <!-- Section 2: Resultados por grupo -->
+        <!-- 2: Evolucion diaria -->
         <div class="section">
-            <h2><span class="num">2</span> Resultados por grupo (post-QR)</h2>
-            <table style="margin-bottom:20px;">
-                <thead><tr><th>Grupo</th><th class="text-center">Base</th><th class="text-center">Pagaron</th><th class="text-center">% Cobranza</th><th class="text-center">Via QR</th><th class="text-center">% QR</th><th class="text-center">Generaron QR</th><th class="text-center">Conv. QR</th></tr></thead>
-                <tbody>
-                    {grp_html}
-                    <tr style="background:#f8f9fa;">
-                        <td class="bold">Total</td>{tdc(fmt(tot_base), True)}{tdc(fmt(tot_pag), True)}{tdc(pct(tot_pag, tot_base), True)}
-                        {tdc(fmt(tot_qrp), True, '#28a745')}{tdc(pct(tot_qrp, tot_pag), True, '#28a745')}
-                        {tdc(fmt(tot_qrg), True)}{tdc(pct(tot_qrp, tot_qrg), True)}
-                    </tr>
-                </tbody>
-            </table>
-            <h3 style="font-size:14px; color:#004481; margin-bottom:12px;">Desglose por pasarela</h3>
-            <table class="detail-table" style="margin-bottom:20px;">
-                <thead><tr><th>Grupo</th><th class="text-center">Monnet</th><th class="text-center">BBVA QR</th><th class="text-center">MP</th><th class="text-center">Rec/Otros</th><th class="text-center">Total</th></tr></thead>
-                <tbody>{grp_pas_html}</tbody>
-            </table>
-        </div>
-
-        <!-- Section 3: Evolucion diaria -->
-        <div class="section">
-            <h2><span class="num">3</span> Evolucion diaria de pagos</h2>
+            <h2><span class="num">2</span> Evolucion diaria de pagos</h2>
             <table class="detail-table">
-                <thead><tr><th>Dia</th><th class="text-center">Monnet</th><th class="text-center">BBVA QR</th><th class="text-center">MP</th><th class="text-center">Otros</th><th class="text-center">Total</th><th class="text-center">% QR</th><th class="text-center">Acum.</th></tr></thead>
+                <thead><tr><th>Dia</th><th class="text-center">BBVA QR</th><th class="text-center">Monnet</th><th class="text-center">MP</th><th class="text-center">Otros</th><th class="text-center">Total</th><th class="text-center">% QR</th><th class="text-center">Acum.</th></tr></thead>
                 <tbody>
                     {daily_html}
                     <tr style="background:#f8f9fa;">
                         <td class="bold">Total</td>
-                        <td class="text-center bold">{pas_monnet}</td>
                         <td class="text-center bold" style="color:#28a745;">{pas_qr}</td>
+                        <td class="text-center bold">{pas_monnet}</td>
                         <td class="text-center bold">{pas_mp}</td>
-                        <td class="text-center bold">{pas_rec}</td>
+                        <td class="text-center bold">{pas_rec + pas_otros}</td>
                         <td class="text-center bold">{total_pagos}</td>
                         <td class="text-center bold" style="color:#28a745;">{pct(pas_qr, total_pagos)}</td>
                         <td class="text-center bold">{total_pagos}</td>
                     </tr>
                 </tbody>
             </table>
-            <p style="color:#666; font-size:12px; margin-top:4px;">* 10/06: solo desde las 14:10. {d['pre_qr']} pagos pre-QR excluidos.</p>
         </div>
 
-        <!-- Section 4: Segmentacion por monto -->
+        <!-- 3: Segmentacion por monto -->
         <div class="section">
-            <h2><span class="num">4</span> Segmentacion por monto de cuota</h2>
+            <h2><span class="num">3</span> Segmentacion por monto de cuota</h2>
             <table style="margin-bottom:24px;">
                 <thead><tr><th>Rango</th><th class="text-center">Base</th><th class="text-center">Pagaron</th><th class="text-center">% Cobranza</th><th class="text-center">Via QR</th><th class="text-center">% QR</th><th class="text-center">Gen QR</th><th class="text-center">Conv. QR</th></tr></thead>
                 <tbody>
                     {rng_html}
                     <tr style="background:#f8f9fa;">
                         <td class="bold">Total</td>{tdc(fmt(base), True)}{tdc(fmt(total_pagos), True)}{tdc(pct(total_pagos, base), True)}
-                        {tdc(fmt(total_qr_paid), True, '#28a745')}{tdc(pct(total_qr_paid, total_pagos), True, '#28a745')}
-                        {tdc(fmt(total_qr_gen), True)}{tdc(pct(total_qr_paid, total_qr_gen), True)}
+                        {tdc(fmt(qr_paid), True, '#28a745')}{tdc(pct(qr_paid, total_pagos), True, '#28a745')}
+                        {tdc(fmt(qr_gen), True)}{tdc(pct(qr_paid, qr_gen), True)}
                     </tr>
                 </tbody>
             </table>
             <h3 style="font-size:14px; color:#004481; margin-bottom:12px;">Pasarela por rango</h3>
-            <table class="detail-table" style="margin-bottom:20px;">
-                <thead><tr><th>Rango</th><th class="text-center">Monnet</th><th class="text-center">BBVA QR</th><th class="text-center">MP</th><th class="text-center">Recaudo</th><th class="text-center">Total</th></tr></thead>
+            <table class="detail-table">
+                <thead><tr><th>Rango</th><th class="text-center">BBVA QR</th><th class="text-center">Monnet</th><th class="text-center">MP</th><th class="text-center">Recaudo</th><th class="text-center">Total</th></tr></thead>
                 <tbody>{rng_pas_html}</tbody>
             </table>
         </div>
 
-        <!-- Section 5: Banco por pasarela -->
+        <!-- 4: Banco por pasarela -->
         <div class="section">
-            <h2><span class="num">5</span> Banco seleccionado por pasarela</h2>
+            <h2><span class="num">4</span> Banco seleccionado por pasarela</h2>
             <h3 style="font-size:14px; color:#004481; margin-bottom:12px;">Monnet ({monnet_total} registros)</h3>
             <table style="margin-bottom:8px;">
                 <thead><tr><th>Banco/Metodo</th><th class="text-center">Clientes</th><th class="text-center">%</th><th></th></tr></thead>
@@ -755,7 +674,7 @@ def render(d):
                     <tr style="background:#f8f9fa;"><td class="bold">Total</td><td class="text-center bold">{monnet_total}</td><td class="text-center bold">100%</td><td></td></tr>
                 </tbody>
             </table>
-            <h3 style="font-size:14px; color:#004481; margin-bottom:12px; margin-top:24px;">Monnet por rango</h3>
+            <h3 style="font-size:14px; color:#004481; margin-bottom:12px; margin-top:24px;">Monnet por rango de cuota</h3>
             <table class="detail-table" style="margin-bottom:24px;">
                 <thead><tr><th>Rango</th>{''.join(f'<th class="text-center">{bn}</th>' for bn in banco_names)}</tr></thead>
                 <tbody>{banco_rng_html}</tbody>
@@ -770,10 +689,10 @@ def render(d):
             </table>
         </div>
 
-        <!-- Section 6: Trazabilidad QR -->
+        <!-- 5: Trazabilidad QR -->
         <div class="section">
-            <h2><span class="num">6</span> Trazabilidad QR</h2>
-            <p style="color:#666; font-size:14px; margin-bottom:12px;">{d['qr_total']} QRs generados por {d['qr_clientes']} clientes. Status:</p>
+            <h2><span class="num">5</span> Trazabilidad QR</h2>
+            <p style="color:#666; font-size:14px; margin-bottom:12px;">{d['qr_total']} QRs generados por {d['qr_clientes']} clientes en {d['mes'].lower()}.</p>
             <table style="margin-bottom:20px;">
                 <thead><tr><th>Status QR</th><th class="text-center">Cantidad</th><th class="text-center">%</th></tr></thead>
                 <tbody>
@@ -789,8 +708,8 @@ def render(d):
                     <tr style="background:#f8f9fa;"><td class="bold">Total</td><td class="text-center bold">{d['qr_clientes']}</td><td class="text-center bold">100%</td></tr>
                 </tbody>
             </table>
-            <h3 style="font-size:14px; color:#004481; margin-bottom:12px;">Migraciones: tiempo QR &rarr; otro medio</h3>
-            <p style="color:#666; font-size:14px; margin-bottom:16px;"><strong>{d['migraron']} migraron</strong> a otro medio, <strong>{d['sin_pago']} sin pago</strong>.</p>
+            <h3 style="font-size:14px; color:#004481; margin-bottom:12px;">Migraciones: QR &rarr; otro medio</h3>
+            <p style="color:#666; font-size:14px; margin-bottom:16px;"><strong>{d['migraron']} migraron</strong> ({migr_desc}). <strong>{d['sin_pago']} sin pago</strong>.</p>
             <table class="detail-table" style="margin-bottom:20px;">
                 <thead><tr><th>Tiempo</th><th class="text-center">Clientes</th><th class="text-center">%</th></tr></thead>
                 <tbody>
@@ -799,15 +718,75 @@ def render(d):
                 </tbody>
             </table>
             <h3 style="font-size:14px; color:#004481; margin-bottom:12px;">Top 10 migraciones mas rapidas</h3>
-            <table class="detail-table" style="margin-bottom:20px;">
+            <table class="detail-table">
                 <thead><tr><th>Solicitud</th><th>QR generado</th><th>Pago alterno</th><th class="text-center">Diferencia</th><th class="text-right">Monto QR</th><th class="text-right">Monto pagado</th><th>Pasarela</th></tr></thead>
                 <tbody>{top_html}</tbody>
             </table>
         </div>
 
-        <!-- ===== RESULTADOS PILOTO MAYO (historico) ===== -->
+        <!-- 6: Evolucion mensual -->
         <hr class="divider">
-        <p class="section-title">Resultados del Piloto (Mayo 2026)</p>
+        <p class="section-title">Evolucion Mensual</p>
+        <p class="section-subtitle">Comparativa desde el lanzamiento de QR BBVA (mayo 2026)</p>
+
+        <div class="section">
+            <h2><span class="num">6</span> Metricas mes a mes</h2>
+            <table>
+                <thead><tr><th>Mes</th><th class="text-center">Solicitudes</th><th class="text-center">Pagaron</th><th class="text-center">% Cobranza</th><th class="text-center">Via QR</th><th class="text-center">% QR</th><th class="text-center">Gen QR</th><th class="text-center">Conv. QR</th></tr></thead>
+                <tbody>
+                    {hist_html}
+                </tbody>
+            </table>
+            <p style="font-size:12px; color:#888; margin-top:8px;">* Mes en curso (datos parciales)</p>
+        </div>
+
+        <!-- ===== FASE 2: EXPERIMENTO A/B/C JUNIO (historico) ===== -->
+        <hr class="divider">
+        <p class="section-title">Fase 2: Experimento A/B/C (Junio 2026)</p>
+        <p class="section-subtitle">2,550 clientes con cuotas 10-18 junio &mdash; 4 grupos estratificados &mdash; Fase concluida</p>
+
+        <div class="section">
+            <h2><span class="num">F2</span> Diseno del experimento</h2>
+            <p style="color:#666; font-size:14px; margin-bottom:24px;">2,550 clientes con cuotas venciendo entre el 10 y 18 de junio, asignados aleatoriamente a 4 grupos balanceados por fecha de vencimiento y monto.</p>
+            <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px;">
+                <div style="border-radius:10px; padding:20px; text-align:center; background:#f8f9fa; border:2px solid #dee2e6;"><div style="font-size:14px; font-weight:700; color:#495057;">Control</div><div style="font-size:32px; font-weight:700; color:#495057;">638</div><div style="font-size:12px; color:#666;">S/ 106,885 | Prom. S/ 167.53</div></div>
+                <div style="border-radius:10px; padding:20px; text-align:center; background:#e3f2fd; border:2px solid #90caf9;"><div style="font-size:14px; font-weight:700; color:#1565c0;">Grupo A</div><div style="font-size:32px; font-weight:700; color:#1565c0;">638</div><div style="font-size:12px; color:#666;">S/ 100,698 | Prom. S/ 157.83</div></div>
+                <div style="border-radius:10px; padding:20px; text-align:center; background:#fce4ec; border:2px solid #f48fb1;"><div style="font-size:14px; font-weight:700; color:#c62828;">Grupo B</div><div style="font-size:32px; font-weight:700; color:#c62828;">637</div><div style="font-size:12px; color:#666;">S/ 111,383 | Prom. S/ 174.86</div></div>
+                <div style="border-radius:10px; padding:20px; text-align:center; background:#f3e5f5; border:2px solid #ce93d8;"><div style="font-size:14px; font-weight:700; color:#7b1fa2;">Grupo C</div><div style="font-size:32px; font-weight:700; color:#7b1fa2;">637</div><div style="font-size:12px; color:#666;">S/ 105,198 | Prom. S/ 165.15</div></div>
+            </div>
+            <div class="note"><strong>Balance:</strong> Diferencia maxima entre promedios: S/ 17.03 (10.8%). Todos dentro de +/- 5.1% de la media global (S/ 166.34).</div>
+        </div>
+
+        <div class="section">
+            <h2><span class="num">F2</span> Distribucion por fecha de vencimiento</h2>
+            <table style="margin-bottom:20px;">
+                <thead><tr><th>Fecha venc.</th><th class="text-center">Control</th><th class="text-center">A</th><th class="text-center">B</th><th class="text-center">C</th><th class="text-center">Total</th><th class="text-center">%</th></tr></thead>
+                <tbody>
+                    <tr><td class="bold">10/06</td><td class="text-center">185</td><td class="text-center">185</td><td class="text-center">184</td><td class="text-center">184</td><td class="text-center bold">738</td><td class="text-center">28.9%</td></tr>
+                    <tr><td class="bold">11/06</td><td class="text-center">10</td><td class="text-center">10</td><td class="text-center">11</td><td class="text-center">11</td><td class="text-center bold">42</td><td class="text-center">1.6%</td></tr>
+                    <tr><td class="bold">12/06</td><td class="text-center">12</td><td class="text-center">12</td><td class="text-center">11</td><td class="text-center">11</td><td class="text-center bold">46</td><td class="text-center">1.8%</td></tr>
+                    <tr><td class="bold">13/06</td><td class="text-center">1</td><td class="text-center">1</td><td class="text-center">2</td><td class="text-center">2</td><td class="text-center bold">6</td><td class="text-center">0.2%</td></tr>
+                    <tr><td class="bold">14/06</td><td class="text-center">2</td><td class="text-center">2</td><td class="text-center">2</td><td class="text-center">1</td><td class="text-center bold">7</td><td class="text-center">0.3%</td></tr>
+                    <tr><td class="bold">15/06</td><td class="text-center">39</td><td class="text-center">38</td><td class="text-center">38</td><td class="text-center">39</td><td class="text-center bold">154</td><td class="text-center">6.0%</td></tr>
+                    <tr><td class="bold">16/06</td><td class="text-center">9</td><td class="text-center">10</td><td class="text-center">10</td><td class="text-center">9</td><td class="text-center bold">38</td><td class="text-center">1.5%</td></tr>
+                    <tr><td class="bold">17/06</td><td class="text-center">9</td><td class="text-center">9</td><td class="text-center">9</td><td class="text-center">9</td><td class="text-center bold">36</td><td class="text-center">1.4%</td></tr>
+                    <tr><td class="bold">18/06</td><td class="text-center">371</td><td class="text-center">371</td><td class="text-center">370</td><td class="text-center">371</td><td class="text-center bold">1,483</td><td class="text-center">58.2%</td></tr>
+                    <tr style="background:#f8f9fa;"><td class="bold">Total</td><td class="text-center bold">638</td><td class="text-center bold">638</td><td class="text-center bold">637</td><td class="text-center bold">637</td><td class="text-center bold">2,550</td><td class="text-center bold">100%</td></tr>
+                </tbody>
+            </table>
+            <p style="font-size:12px; color:#888;">El 87.1% de los vencimientos se concentra en 10/06 (29%) y 18/06 (58%).</p>
+        </div>
+
+        <div class="section">
+            <h2><span class="num">F2</span> Resultado del experimento (conclusiones)</h2>
+            <div class="note" style="background:#e8f5e9; border-left-color:#28a745; color:#1b5e20;">
+                <strong>Conclusion Fase 2:</strong> No se encontraron diferencias significativas entre los grupos de tratamiento. QR BBVA demostro adopcion consistente en todos los segmentos, lo que sustento la decision de eliminar grupos de control y desplegar QR a toda la base desde julio 2026.
+            </div>
+        </div>
+
+        <!-- ===== FASE 1: PILOTO MAYO (historico) ===== -->
+        <hr class="divider">
+        <p class="section-title">Fase 1: Piloto (Mayo 2026)</p>
         <p class="section-subtitle">232 clientes con cuota 25/05 &mdash; Corte 07/06 (13 dias) &mdash; Sin campana de cobranza</p>
 
         <div class="kpi-grid" style="margin-top:24px;">
@@ -831,12 +810,12 @@ def render(d):
                     <tr style="background:#f8f9fa;"><td class="bold">Total</td><td class="text-center bold">211</td><td class="text-center bold">100%</td><td></td></tr>
                 </tbody>
             </table>
-            <div style="margin-bottom:12px;"><div class="bar-container"><div class="bar-bg" style="height:36px;"><div style="display:flex; height:100%;">
+            <div style="margin-bottom:12px;"><div style="height:36px; background:#f0f2f5; border-radius:6px; overflow:hidden; display:flex;">
                 <div style="width:30.8%; background:#28a745; display:flex; align-items:center; justify-content:center; color:white; font-size:11px; font-weight:600; border-radius:6px 0 0 6px;">QR 30.8%</div>
                 <div style="width:18.0%; background:#ffc107; display:flex; align-items:center; justify-content:center; color:#665200; font-size:11px; font-weight:600;">QR&rarr;otro 18%</div>
                 <div style="width:42.7%; background:#004481; display:flex; align-items:center; justify-content:center; color:white; font-size:11px; font-weight:600;">Monnet 42.7%</div>
                 <div style="width:8.5%; background:#6f42c1; display:flex; align-items:center; justify-content:center; color:white; font-size:10px; font-weight:600; border-radius:0 6px 6px 0;">MP+Rec 8.5%</div>
-            </div></div></div></div>
+            </div></div>
         </div>
 
         <div class="section">
@@ -896,12 +875,13 @@ def render(d):
 
         <div class="section">
             <h2><span class="num">N</span> Notas metodologicas</h2>
-            <div class="note"><strong>Piloto (mayo):</strong> 300 solicitudes originales &rarr; 281 con cuota mayo &rarr; 49 pagaron antes del QR &rarr; Base efectiva: 232. Solo clientes sin campana de cobranza.</div>
-            <div class="note" style="margin-top:12px;"><strong>Experimento (junio):</strong> 2,550 clientes con cuotas 10-18 jun. 4 grupos (Control, A, B, C) estratificados por fecha de vencimiento. Los datos en tiempo real se actualizan con cada visita (cache 5 min).</div>
+            <div class="note"><strong>Piloto (mayo 2026):</strong> 300 solicitudes originales &rarr; 281 con cuota mayo &rarr; 49 pagaron antes del QR &rarr; Base efectiva: 232. Solo clientes sin campana de cobranza.</div>
+            <div class="note" style="margin-top:12px;"><strong>Experimento (junio 2026):</strong> 2,550 clientes con cuotas 10-18 jun. 4 grupos (Control, A, B, C) estratificados por fecha de vencimiento. Concluido sin diferencias significativas entre grupos.</div>
+            <div class="note" style="margin-top:12px;"><strong>Operacion (julio 2026+):</strong> QR desplegado a toda la base sin grupos de control. Dashboard muestra metricas del mes en curso automaticamente.</div>
         </div>
 
         <div class="footer">
-            BaldeCash &mdash; Dashboard live &mdash; Ultima actualizacion: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+            BaldeCash &mdash; Dashboard QR BBVA &mdash; {now.strftime('%d/%m/%Y %H:%M:%S')}
         </div>
     </div>
 </body>
@@ -920,10 +900,11 @@ class handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(html.encode('utf-8'))
         except Exception as e:
+            import traceback
             self.send_response(500)
             self.send_header('Content-type', 'text/html; charset=utf-8')
             self.end_headers()
             self.wfile.write(f'''<!DOCTYPE html><html><body style="font-family:sans-serif;padding:40px;">
-                <h1>Error generando dashboard</h1><pre>{str(e)}</pre>
+                <h1>Error generando dashboard</h1><pre>{traceback.format_exc()}</pre>
                 <p>Verifica las variables de entorno DB_HOST, DB_USER, DB_PASSWORD, DB_NAME.</p>
             </body></html>'''.encode('utf-8'))
