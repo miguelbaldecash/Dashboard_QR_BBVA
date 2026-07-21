@@ -25,7 +25,6 @@ def get_month_window():
     """Return (start, end) for the current month."""
     hoy = date.today()
     w_start = f"{hoy.year}-{hoy.month:02d}-01"
-    _, last = monthrange(hoy.year, hoy.month)
     if hoy.month == 12:
         w_end = f"{hoy.year + 1}-01-01"
     else:
@@ -151,12 +150,13 @@ def get_data():
     d['ranges_order'] = ranges_order
     d['cuota_promedio'] = round(d['monto_total'] / d['total_solicitudes'], 2) if d['total_solicitudes'] else 0
 
-    # --- Evolucion diaria ---
+    # --- Evolucion diaria (todos los meses desde mayo 2026) ---
     cur.execute("""SELECT DATE(p.fecha_pago) AS dia, p.pasarela_pago, COUNT(DISTINCT c.solicitud_id)
         FROM pago p JOIN cronograma c ON c.id=p.cronograma_id
-        WHERE c.estado='activo' AND c.fecha_vencimiento >= %s AND c.fecha_vencimiento < %s
+        WHERE c.estado='activo'
+        AND c.fecha_vencimiento >= '2026-05-01' AND c.fecha_vencimiento < %s
         AND p.deleted_at IS NULL
-        GROUP BY dia, p.pasarela_pago ORDER BY dia""", (w_start, w_end))
+        GROUP BY dia, p.pasarela_pago ORDER BY dia""", (w_end,))
     daily_raw = {}
     for r in cur.fetchall():
         dia = str(r[0])
@@ -337,22 +337,77 @@ def render(d):
     pct_mp = round(pas_mp / total_pagos * 100, 1) if total_pagos else 0
     pct_otros_bar = round(100 - pct_qr - pct_monnet - pct_mp, 1)
 
-    # --- Daily table ---
+    # --- Daily table grouped by month ---
     daily_html = ''
-    acum = 0
+    # Group days by month, compute per-month totals
+    hoy = date.today()
+    current_mes = f"{hoy.year}-{hoy.month:02d}"
+    daily_by_month = {}
+    for dia in sorted(d['diario'].keys()):
+        mes_key = dia[:7]  # '2026-07'
+        if mes_key not in daily_by_month:
+            daily_by_month[mes_key] = []
+        daily_by_month[mes_key].append(dia)
+
+    # Build month filter options
+    month_filter_options = ''
+    for mk in sorted(daily_by_month.keys()):
+        y_, m_ = mk.split('-')
+        label = f"{MESES_ES.get(int(m_), m_)} {y_}"
+        sel = ' selected' if mk == current_mes else ''
+        month_filter_options += f'<option value="{mk}"{sel}>{label}</option>'
+
+    # Build all daily rows with data-mes attribute
     for dia in sorted(d['diario'].keys()):
         dd = d['diario'][dia]
+        mes_key = dia[:7]
         total_dia = dd['monnet'] + dd['bbva_qr'] + dd['mp'] + dd['otros']
-        acum += total_dia
         pct_qr_dia = pct(dd['bbva_qr'], total_dia)
-        dia_fmt = dia[5:].replace('-', '/')
-        bg = ' style="background:#fff8e1;"' if dia == hoy_str else ''
-        daily_html += f'''<tr{bg}>
+        dia_fmt = dia[8:10] + '/' + dia[5:7]  # DD/MM
+        bg_style = 'background:#fff8e1;' if dia == hoy_str else ''
+        display = 'none' if mes_key != current_mes else ''
+        style = f' style="{bg_style}display:{display};"'.replace('display:;', '').replace('style=" "', '').strip()
+        if not bg_style and display:
+            style = f' style="display:none;"'
+        elif bg_style and display:
+            style = f' style="{bg_style}display:{display};"'
+        elif bg_style:
+            style = f' style="{bg_style}"'
+        else:
+            style = ''
+        daily_html += f'''<tr class="daily-row" data-mes="{mes_key}"{style}>
             <td class="bold">{dia_fmt}</td>
             {tdc(dd['bbva_qr'], True, '#28a745')}{tdc(dd['monnet'])}{tdc(dd['mp'])}{tdc(dd['otros'])}
             <td class="text-center bold">{total_dia}</td>
             <td class="text-center bold" style="color:#28a745;">{pct_qr_dia}</td>
-            {tdc(acum)}
+        </tr>'''
+
+    # Per-month summary rows (hidden, shown by JS)
+    monthly_summary = {}
+    for mk, dias in daily_by_month.items():
+        s = {'bbva_qr': 0, 'monnet': 0, 'mp': 0, 'otros': 0, 'total': 0}
+        for dia in dias:
+            dd = d['diario'][dia]
+            s['bbva_qr'] += dd['bbva_qr']
+            s['monnet'] += dd['monnet']
+            s['mp'] += dd['mp']
+            s['otros'] += dd['otros']
+            s['total'] += dd['monnet'] + dd['bbva_qr'] + dd['mp'] + dd['otros']
+        monthly_summary[mk] = s
+
+    daily_summary_rows = ''
+    for mk, s in sorted(monthly_summary.items()):
+        display = 'none' if mk != current_mes else ''
+        style = f' style="background:#f8f9fa;display:{display};"' if display else ' style="background:#f8f9fa;"'
+        pct_qr_m = pct(s['bbva_qr'], s['total'])
+        daily_summary_rows += f'''<tr class="daily-summary" data-mes="{mk}"{style}>
+            <td class="bold">Total</td>
+            <td class="text-center bold" style="color:#28a745;">{s['bbva_qr']}</td>
+            <td class="text-center bold">{s['monnet']}</td>
+            <td class="text-center bold">{s['mp']}</td>
+            <td class="text-center bold">{s['otros']}</td>
+            <td class="text-center bold">{s['total']}</td>
+            <td class="text-center bold" style="color:#28a745;">{pct_qr_m}</td>
         </tr>'''
 
     # --- Monto range tables ---
@@ -623,24 +678,26 @@ def render(d):
 
         <!-- 2: Evolucion diaria -->
         <div class="section">
-            <h2><span class="num">2</span> Evolucion diaria de pagos</h2>
-            <table class="detail-table">
-                <thead><tr><th>Dia</th><th class="text-center">BBVA QR</th><th class="text-center">Monnet</th><th class="text-center">MP</th><th class="text-center">Otros</th><th class="text-center">Total</th><th class="text-center">% QR</th><th class="text-center">Acum.</th></tr></thead>
+            <h2 style="justify-content:space-between;"><span style="display:flex;align-items:center;gap:10px;"><span class="num">2</span> Evolucion diaria de pagos</span>
+                <select id="mesFilter" onchange="filterMonth(this.value)" style="padding:6px 32px 6px 12px; border-radius:8px; border:2px solid #004481; color:#004481; font-size:13px; font-weight:600; cursor:pointer; appearance:none; -webkit-appearance:none; background:white url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 fill=%22%23004481%22 viewBox=%220 0 16 16%22%3E%3Cpath d=%22M8 11L3 6h10z%22/%3E%3C/svg%3E') no-repeat right 10px center;">
+                    {month_filter_options}
+                </select>
+            </h2>
+            <table class="detail-table" id="dailyTable">
+                <thead><tr><th>Dia</th><th class="text-center">BBVA QR</th><th class="text-center">Monnet</th><th class="text-center">MP</th><th class="text-center">Otros</th><th class="text-center">Total</th><th class="text-center">% QR</th></tr></thead>
                 <tbody>
                     {daily_html}
-                    <tr style="background:#f8f9fa;">
-                        <td class="bold">Total</td>
-                        <td class="text-center bold" style="color:#28a745;">{pas_qr}</td>
-                        <td class="text-center bold">{pas_monnet}</td>
-                        <td class="text-center bold">{pas_mp}</td>
-                        <td class="text-center bold">{pas_rec + pas_otros}</td>
-                        <td class="text-center bold">{total_pagos}</td>
-                        <td class="text-center bold" style="color:#28a745;">{pct(pas_qr, total_pagos)}</td>
-                        <td class="text-center bold">{total_pagos}</td>
-                    </tr>
+                    {daily_summary_rows}
                 </tbody>
             </table>
         </div>
+        <script>
+        function filterMonth(mes) {{
+            document.querySelectorAll('.daily-row, .daily-summary').forEach(function(tr) {{
+                tr.style.display = tr.getAttribute('data-mes') === mes ? '' : 'none';
+            }});
+        }}
+        </script>
 
         <!-- 3: Segmentacion por monto -->
         <div class="section">
